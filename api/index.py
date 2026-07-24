@@ -16,7 +16,7 @@ from flask import Flask, request
 from markupsafe import escape
 
 from api_client import StatsAPIClient, StatsAPIError
-from ficha_generator import generate_ficha_bytes
+from ficha_generator import generate_ficha_bytes, generate_form_ficha_bytes, generate_match_by_match_ficha_bytes
 from prematch_analysis import build_payload
 
 app = Flask(__name__)
@@ -106,8 +106,9 @@ def analyze():
         error = f"<p class='error'>{escape(str(exc))}</p>"
         return render_page(error + FORM_HTML), 404
 
-    png_bytes = generate_ficha_bytes(payload)
-    img_b64 = base64.b64encode(png_bytes).decode("ascii")
+    def img_tag(png_bytes: bytes, alt: str) -> str:
+        b64 = base64.b64encode(png_bytes).decode("ascii")
+        return f"<img src='data:image/png;base64,{b64}' alt='{alt}'>"
 
     result = payload["model"]["result"]
     btts = payload["model"]["btts"]
@@ -118,7 +119,9 @@ def analyze():
     )
     body = (
         f"{summary}"
-        f"<img src='data:image/png;base64,{img_b64}' alt='Ficha pre-partido'>"
+        f"{img_tag(generate_ficha_bytes(payload), 'Ficha pre-partido')}"
+        f"{img_tag(generate_form_ficha_bytes(payload), 'Perfil de ataque y defensa')}"
+        f"{img_tag(generate_match_by_match_ficha_bytes(payload), 'Resumen partido a partido')}"
         f"<div><a class='back' href='/'>&larr; Nuevo analisis</a></div>"
     )
     return render_page(body)

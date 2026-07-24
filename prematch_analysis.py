@@ -21,8 +21,9 @@ from pathlib import Path
 from typing import Any
 
 from api_client import StatsAPIClient, StatsAPIError
-from ficha_generator import generate_ficha
+from ficha_generator import generate_ficha, generate_form_ficha, generate_match_by_match_ficha
 from models import (
+    attack_defense_rating,
     build_score_matrix,
     btts_probabilities,
     double_chance_probabilities,
@@ -38,6 +39,7 @@ logger = logging.getLogger("prematch_analysis")
 
 DEFAULT_OUTPUT_DIR = "fichas"
 DEFAULT_N_RECENT = 10
+DEFAULT_FORM_N = 5
 DEFAULT_SEARCH_WINDOW_DAYS = 21
 BOOKMAKER_PREFERENCE = ["Pinnacle", "Bet365", "Betfair Exchange", "BetMGM UK", "Paddy Power"]
 
@@ -207,6 +209,81 @@ def stats_from_recent_matches(
     }
 
 
+# ---------------------------------------------------------------------- #
+# Recent match records (form/rating ficha)
+# ---------------------------------------------------------------------- #
+def get_recent_match_records(
+    client: StatsAPIClient, team_id: str, reference_date: str, n: int = 5
+) -> list[dict[str, Any]]:
+    """Last n finished matches for team_id: opponent, score and shot/corner/xG stats for both sides."""
+    matches = client.list_matches(team_id=team_id, status="finished", date_to=reference_date, per_page=100)
+    if not matches:
+        return []
+
+    def match_dt(m: dict) -> datetime:
+        try:
+            return datetime.strptime(m["utc_date"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        except (ValueError, KeyError):
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    matches.sort(key=match_dt, reverse=True)
+
+    records: list[dict[str, Any]] = []
+    for m in matches[:n]:
+        is_home = m["home_team"]["id"] == team_id
+        opponent = m["away_team"] if is_home else m["home_team"]
+        score = m.get("score") or {}
+        team_goals = score.get("home") if is_home else score.get("away")
+        opp_goals = score.get("away") if is_home else score.get("home")
+        if team_goals is None or opp_goals is None:
+            continue
+
+        match_stats = client.get_match_stats(m["id"]) or {}
+        overview = match_stats.get("overview", {})
+
+        def side(stat_key: str) -> tuple[float | None, float | None]:
+            block = (overview.get(stat_key) or {}).get("all") or {}
+            home_v, away_v = block.get("home"), block.get("away")
+            return (home_v, away_v) if is_home else (away_v, home_v)
+
+        team_shots, opp_shots = side("total_shots")
+        team_sot, opp_sot = side("shots_on_target")
+        team_corners, opp_corners = side("corner_kicks")
+        team_xg, opp_xg = side("expected_goals")
+
+        records.append(
+            {
+                "opponent_name": opponent["name"],
+                "is_home": is_home,
+                "team_goals": team_goals,
+                "opp_goals": opp_goals,
+                "team_shots": team_shots,
+                "opp_shots": opp_shots,
+                "team_sot": team_sot,
+                "opp_sot": opp_sot,
+                "team_corners": team_corners,
+                "opp_corners": opp_corners,
+                "team_xg": team_xg,
+                "opp_xg": opp_xg,
+            }
+        )
+    return records
+
+
+def rating_from_records(records: list[dict[str, Any]]) -> dict[str, float | str]:
+    def col(key: str) -> list[float]:
+        return [r[key] for r in records if r[key] is not None]
+
+    return attack_defense_rating(
+        xg_for=col("team_xg"),
+        shots_for=col("team_shots"),
+        sot_for=col("team_sot"),
+        xg_against=col("opp_xg"),
+        shots_against=col("opp_shots"),
+        sot_against=col("opp_sot"),
+    )
+
+
 def get_team_analysis_stats(
     client: StatsAPIClient,
     team_id: str,
@@ -370,6 +447,11 @@ def build_payload(
         edges["btts_yes"] = value_edge(btts["yes"], odds["btts"]["yes"])
         edges["btts_no"] = value_edge(btts["no"], odds["btts"]["no"])
 
+    home_recent = get_recent_match_records(client, home_team_info["id"], reference_date, DEFAULT_FORM_N)
+    away_recent = get_recent_match_records(client, away_team_info["id"], reference_date, DEFAULT_FORM_N)
+    home_rating = rating_from_records(home_recent)
+    away_rating = rating_from_records(away_recent)
+
     payload = {
         "home_team": home_team_info,
         "away_team": away_team_info,
@@ -391,6 +473,11 @@ def build_payload(
         },
         "odds": odds,
         "edges": edges,
+        "home_recent_matches": home_recent,
+        "away_recent_matches": away_recent,
+        "home_rating": home_rating,
+        "away_rating": away_rating,
+        "form_n": DEFAULT_FORM_N,
     }
     return payload
 
@@ -419,8 +506,11 @@ def run(args: argparse.Namespace) -> Path:
     output_dir = Path(args.output_dir)
     safe_home = home_team_info["name"].replace(" ", "_")
     safe_away = away_team_info["name"].replace(" ", "_")
-    output_path = output_dir / f"{safe_home}_vs_{safe_away}_{payload['date_display']}.png"
+    base_name = f"{safe_home}_vs_{safe_away}_{payload['date_display']}"
+    output_path = output_dir / f"{base_name}.png"
     generate_ficha(payload, output_path)
+    generate_form_ficha(payload, output_dir / f"{base_name}_perfil.png")
+    generate_match_by_match_ficha(payload, output_dir / f"{base_name}_partidos.png")
 
     print(f"\nFicha generada: {output_path}")
     print(f"1X2 -> Local {result['home']*100:.1f}%  Empate {result['draw']*100:.1f}%  Visita {result['away']*100:.1f}%")

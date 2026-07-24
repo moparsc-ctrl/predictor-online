@@ -286,3 +286,178 @@ def generate_ficha_bytes(payload: dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     _render_ficha(payload).save(buf, "PNG")
     return buf.getvalue()
+
+
+# ------------------------------------------------------------------------ #
+# Form / rating profile ficha (attack & defense 0-100 bars)
+# ------------------------------------------------------------------------ #
+def _rating_row(draw, y, label, value, color) -> int:
+    f = font(20)
+    fb = font(22, bold=True)
+    draw.text((MARGIN, y), label, font=f, fill=SUBTEXT)
+    bar_x = MARGIN + 160
+    bar_w = WIDTH - 2 * MARGIN - 160 - 70
+    _bar(draw, bar_x, y - 2, bar_w, 26, value / 100, color)
+    val_text = f"{value:.0f}"
+    draw.text((bar_x + bar_w + 16, y - 4), val_text, font=fb, fill=color)
+    return y + 44
+
+
+def _render_form_ficha(payload: dict[str, Any]) -> Image.Image:
+    canvas_h = 700
+    img = Image.new("RGB", (WIDTH, canvas_h), BG)
+    draw = ImageDraw.Draw(img)
+
+    home = payload["home_team"]
+    away = payload["away_team"]
+    n = payload.get("form_n", 5)
+
+    y = MARGIN
+    f_title = font(28, bold=True)
+    _center_text(draw, WIDTH / 2, y, payload.get("competition_name", "").upper(), f_title, GOLD)
+    y += 40
+    f_sub = font(18)
+    _center_text(draw, WIDTH / 2, y, f"Perfil de ataque y defensa (ultimos {n} partidos)", f_sub, SUBTEXT)
+    y += 56
+
+    for team, rating_key, color in (("home_team", "home_rating", ACCENT_HOME), ("away_team", "away_rating", ACCENT_AWAY)):
+        team_info = payload[team]
+        rating = payload[rating_key]
+        f_name = font(26, bold=True)
+        draw.text((MARGIN, y), team_info["name"], font=f_name, fill=color)
+        f_level = font(18)
+        level_text = f"nivel: {rating['level']}"
+        w = _text_w(draw, level_text, f_level)
+        draw.text((WIDTH - MARGIN - w, y + 4), level_text, font=f_level, fill=SUBTEXT)
+        y += 46
+        y = _rating_row(draw, y, "Ataque", rating["attack"], color)
+        y = _rating_row(draw, y, "Defensa", rating["defense"], color)
+        y += 30
+
+    y += 10
+    f_foot = font(15)
+    disclaimer = (
+        "Rating 0-100 basado en xG, tiros y tiros a puerta (a favor y en contra). "
+        "Informativo, no garantiza resultado."
+    )
+    _center_text(draw, WIDTH / 2, y, disclaimer, f_foot, SUBTEXT)
+    y += 40
+
+    return img.crop((0, 0, WIDTH, min(canvas_h, y)))
+
+
+def generate_form_ficha(payload: dict[str, Any], output_path: str | Path) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _render_form_ficha(payload).save(output_path, "PNG")
+    return output_path
+
+
+def generate_form_ficha_bytes(payload: dict[str, Any]) -> bytes:
+    buf = io.BytesIO()
+    _render_form_ficha(payload).save(buf, "PNG")
+    return buf.getvalue()
+
+
+# ------------------------------------------------------------------------ #
+# Match-by-match ficha (last N games, shots / on target / corners per side)
+# ------------------------------------------------------------------------ #
+def _match_card(draw, x, y, w, h, record: dict[str, Any], team_color) -> None:
+    _rounded_rect(draw, (x, y, x + w, y + h), 14, CARD_BG)
+    pad = 20
+    cy = y + pad
+
+    prefix = "vs" if record["is_home"] else "@"
+    header = f"{prefix} {record['opponent_name']}"
+    f_head = font(19, bold=True)
+    _center_text(draw, x + w / 2, cy, header, f_head, TEXT)
+    cy += 30
+
+    team_goals, opp_goals = record["team_goals"], record["opp_goals"]
+    score_text = f"{team_goals}-{opp_goals}"
+    f_score = font(26, bold=True)
+    if team_goals > opp_goals:
+        score_color = GREEN
+    elif team_goals < opp_goals:
+        score_color = RED
+    else:
+        score_color = GRAY
+    _center_text(draw, x + w / 2, cy, score_text, f_score, score_color)
+    cy += 48
+
+    rows = [
+        ("Tiros", record["team_shots"], record["opp_shots"]),
+        ("A puerta", record["team_sot"], record["opp_sot"]),
+        ("Corners", record["team_corners"], record["opp_corners"]),
+    ]
+    f_val = font(20, bold=True)
+    f_lbl = font(15)
+    for label, team_val, opp_val in rows:
+        team_text = "-" if team_val is None else f"{team_val:.0f}"
+        opp_text = "-" if opp_val is None else f"{opp_val:.0f}"
+        draw.text((x + pad, cy), team_text, font=f_val, fill=team_color)
+        _center_text(draw, x + w / 2, cy + 3, label, f_lbl, SUBTEXT)
+        opp_w = _text_w(draw, opp_text, f_val)
+        draw.text((x + w - pad - opp_w, cy), opp_text, font=f_val, fill=TEXT)
+        cy += 34
+
+
+def _render_match_by_match_ficha(payload: dict[str, Any]) -> Image.Image:
+    home = payload["home_team"]
+    away = payload["away_team"]
+    home_records = payload["home_recent_matches"]
+    away_records = payload["away_recent_matches"]
+    n_rows = max(len(home_records), len(away_records), 1)
+
+    card_h = 190
+    card_gap_y = 20
+    header_h = 170
+    canvas_h = header_h + n_rows * (card_h + card_gap_y) + 80
+    img = Image.new("RGB", (WIDTH, canvas_h), BG)
+    draw = ImageDraw.Draw(img)
+
+    y = MARGIN
+    f_title = font(28, bold=True)
+    _center_text(draw, WIDTH / 2, y, payload.get("competition_name", "").upper(), f_title, GOLD)
+    y += 40
+    f_sub = font(18)
+    _center_text(draw, WIDTH / 2, y, "Resumen partido a partido (forma reciente)", f_sub, SUBTEXT)
+    y += 40
+
+    gap_x = 24
+    col_w = (WIDTH - 2 * MARGIN - gap_x) / 2
+    col_x_home = MARGIN
+    col_x_away = MARGIN + col_w + gap_x
+
+    f_team = font(24, bold=True)
+    _center_text(draw, col_x_home + col_w / 2, y, home["name"], f_team, ACCENT_HOME)
+    _center_text(draw, col_x_away + col_w / 2, y, away["name"], f_team, ACCENT_AWAY)
+    y += 44
+
+    cards_top = y
+    for i in range(n_rows):
+        cy = cards_top + i * (card_h + card_gap_y)
+        if i < len(home_records):
+            _match_card(draw, col_x_home, cy, col_w, card_h, home_records[i], ACCENT_HOME)
+        if i < len(away_records):
+            _match_card(draw, col_x_away, cy, col_w, card_h, away_records[i], ACCENT_AWAY)
+    y = cards_top + n_rows * (card_h + card_gap_y) + 10
+
+    f_foot = font(15)
+    _center_text(draw, WIDTH / 2, y, "Numeros de cada equipo y su rival en el mismo partido.", f_foot, SUBTEXT)
+    y += 30
+
+    return img.crop((0, 0, WIDTH, min(canvas_h, y)))
+
+
+def generate_match_by_match_ficha(payload: dict[str, Any], output_path: str | Path) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _render_match_by_match_ficha(payload).save(output_path, "PNG")
+    return output_path
+
+
+def generate_match_by_match_ficha_bytes(payload: dict[str, Any]) -> bytes:
+    buf = io.BytesIO()
+    _render_match_by_match_ficha(payload).save(buf, "PNG")
+    return buf.getvalue()

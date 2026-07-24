@@ -20,6 +20,17 @@ DEFAULT_RHO = -0.05
 DEFAULT_MAX_GOALS = 10
 OVER_UNDER_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]
 
+# Reference values treated as a "100" on the 0-100 attack/defense rating scale,
+# calibrated to typical top-division per-match volumes. Deliberately simple
+# (linear, capped) rather than league-relative — informational, not a model input.
+RATING_XG_REF = 2.5
+RATING_SHOTS_REF = 20.0
+RATING_SOT_REF = 8.0
+RATING_WEIGHTS = {"xg": 0.5, "shots": 0.25, "sot": 0.25}
+
+RATING_LEVEL_STRONG = 70.0
+RATING_LEVEL_MEDIUM = 45.0
+
 
 def estimate_expected_goals(
     home_attack_home: float,
@@ -129,3 +140,58 @@ def value_edge(model_prob: float, decimal_odd: float | None) -> float | None:
     if not decimal_odd:
         return None
     return model_prob - implied_probability(decimal_odd)
+
+
+def _avg(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def _rating_component(avg_value: float | None, reference: float) -> float | None:
+    if avg_value is None:
+        return None
+    return max(0.0, min(1.0, avg_value / reference))
+
+
+def rating_level(score: float) -> str:
+    if score >= RATING_LEVEL_STRONG:
+        return "fuerte"
+    if score >= RATING_LEVEL_MEDIUM:
+        return "medio"
+    return "debil"
+
+
+def attack_defense_rating(
+    xg_for: list[float],
+    shots_for: list[float],
+    sot_for: list[float],
+    xg_against: list[float],
+    shots_against: list[float],
+    sot_against: list[float],
+) -> dict[str, float | str]:
+    """Blend xG, shots and shots-on-target (for and against) into 0-100 attack/defense scores.
+
+    Each list holds one value per recent match (already filtered for None). Missing
+    stat types just drop out of the weighted average rather than zeroing the score.
+    """
+    w = RATING_WEIGHTS
+
+    def blend(avg_xg: float | None, avg_shots: float | None, avg_sot: float | None) -> float:
+        parts = [
+            (w["xg"], _rating_component(avg_xg, RATING_XG_REF)),
+            (w["shots"], _rating_component(avg_shots, RATING_SHOTS_REF)),
+            (w["sot"], _rating_component(avg_sot, RATING_SOT_REF)),
+        ]
+        used = [(weight, value) for weight, value in parts if value is not None]
+        total_weight = sum(weight for weight, _ in used) or 1.0
+        return 100 * sum(weight * value for weight, value in used) / total_weight
+
+    attack = blend(_avg(xg_for), _avg(shots_for), _avg(sot_for))
+    defense = 100 - blend(_avg(xg_against), _avg(shots_against), _avg(sot_against))
+    attack = max(0.0, min(100.0, attack))
+    defense = max(0.0, min(100.0, defense))
+
+    return {
+        "attack": attack,
+        "defense": defense,
+        "level": rating_level((attack + defense) / 2),
+    }
