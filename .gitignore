@@ -1,0 +1,10 @@
+.env
+*.env
+!.env.example
+STATSAPI_KEY.env
+__pycache__/
+*.pyc
+cache/
+fichas/
+.vercel/
+.claude/settings.local.json

@@ -1,0 +1,7025 @@
+# Sports API (v1.0.0)
+
+REST API for football data across upcoming and historical matches (scores, stats, xG, and odds where available).
+
+## Base URL
+
+- `https://api.thestatsapi.com/api` — API Server
+
+## Authentication
+
+All endpoints require a **Bearer token** in the `Authorization` header unless marked otherwise.
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+---
+
+## Endpoints
+
+### Health
+API health check
+
+#### GET `/health`
+**API health check**
+
+**Response (200):**
+
+```json
+{
+  "status": "healthy",
+  "timestamp": <string (date-time)>
+}
+```
+
+### Competitions
+Football competitions/leagues
+
+#### GET `/football/competitions`
+**List all competitions**
+
+Retrieve a paginated list of football competitions
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (default 1) |
+| `per_page` | integer | No | `20` | Results per page (default 20, max 100). The legacy alias `limit` is also accepted and behaves identically. |
+| `country` | string | No |  | Filter by country name (optional) |
+| `country_code` | string | No |  | Filter by country code (optional) |
+| `type` | string — enum: `league`, `cup`, `tournament` | No |  | Filter by competition type (optional). Values: `league`, `cup`, `tournament` |
+| `search` | string | No |  | Search competitions by name (case-insensitive partial match). Example: `Premier` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "comp_3039",
+      "name": "Premier League",
+      "country": "England",
+      "country_code": "GB",
+      "subdivision_code": "GB-ENG",
+      "confederation": null,
+      "type": "league",
+      "has_team_stats": true,
+      "has_player_stats": true,
+      "odds_available": true,
+      "live_odds_available": true,
+      "xg_available": true
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 100,
+    "total_pages": 5
+  }
+}
+```
+
+#### GET `/football/competitions/{competition_id}`
+**Get competition details**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `competition_id` | string | Yes | Example: `comp_3039` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": "comp_3039",
+    "name": "Premier League",
+    "country": "England",
+    "country_code": "GB",
+    "subdivision_code": "GB-ENG",
+    "confederation": null,
+    "type": "league",
+    "has_team_stats": true,
+    "has_player_stats": true,
+    "odds_available": true,
+    "live_odds_available": true,
+    "xg_available": true,
+    "current_season_id": "sn_6125938",
+    "total_teams": 20
+  }
+}
+```
+
+#### GET `/football/competitions/{competition_id}/seasons`
+**List seasons for a competition**
+
+Returns all seasons for the competition, newest first. The season with `is_current` true matches `current_season_id` on the competition detail response.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `competition_id` | string | Yes | Example: `comp_3039` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "sn_6125938",
+      "name": "Premier League 24/25",
+      "year": "24/25",
+      "start_year": 2024,
+      "end_year": 2025,
+      "is_current": <boolean>
+    }
+  ]
+}
+```
+
+#### GET `/football/competitions/{competition_id}/seasons/{season_id}/groups`
+**List groups in a season**
+
+Returns the groups present in the given competition + season pair,
+sorted A→L. Applies to competitions whose group stage is split
+across separate tournament rows (FIFA World Cup, EURO, AFCON,
+pre-2024 UEFA Champions League group stage, etc.). Returns an
+empty array for competitions without groups (Premier League, La
+Liga, etc.). The `group_label` value can be passed back into
+`/football/matches?group=` to filter matches.
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `competition_id` | string | Yes | Example: `comp_6107` |
+| `season_id` | string | Yes | Example: `sn_326766` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "group_label": "A",
+      "name": "Group A"
+    }
+  ]
+}
+```
+
+#### GET `/football/competitions/{competition_id}/seasons/{season_id}/standings`
+**Standings for a competition season**
+
+Flat list of standings rows sorted by `group_label` (null first,
+then A→L) and then `position` ascending. Linear leagues (Premier
+League, La Liga, …) return N rows with `group_label: null`.
+Group-stage tournaments (FIFA World Cup, EURO, AFCON, pre-2024
+UEFA Champions League group stage) return N × G rows with
+`group_label` set. Knockout-only cups (FA Cup, …) return an
+empty array. Use `?group=` to slice to a single group.
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `competition_id` | string | Yes | Example: `comp_6107` |
+| `season_id` | string | Yes | Example: `sn_326766` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `group` | string — enum: `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `L` | No |  | Filter to a single group (A–L, case-insensitive). Only meaningful for group-stage competitions; for linear leagues it returns an empty array.. Values: `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `L` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "team": {
+        "id": "tm_0406",
+        "name": "Liverpool"
+      },
+      "position": 1,
+      "matches_played": 38,
+      "wins": 28,
+      "draws": 7,
+      "losses": 3,
+      "goals_for": 96,
+      "goals_against": 34,
+      "goal_difference": 62,
+      "points": 91,
+      "group_label": <string | null>
+    }
+  ]
+}
+```
+
+### Teams
+Football teams
+
+#### GET `/football/teams`
+**List teams**
+
+Retrieve a paginated list of teams with optional filters
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (default 1) |
+| `per_page` | integer | No | `20` | Results per page (default 20, max 100). The legacy alias `limit` is also accepted and behaves identically. |
+| `competition_id` | string | No |  | Filter teams by competition (optional). Example: `comp_3039` |
+| `season_id` | string | No |  | Filter teams by season (optional, requires competition_id). Example: `sn_6125938` |
+| `country` | string | No |  | Filter teams by country (optional) |
+| `search` | string | No |  | Search teams by name (case-insensitive partial match). Example: `Arsenal` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "tm_0406",
+      "name": "Liverpool",
+      "short_name": "Man Utd",
+      "country": "England",
+      "primary_competition": {
+        "id": "comp_3039",
+        "name": "Premier League"
+      }
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 100,
+    "total_pages": 5
+  }
+}
+```
+
+#### GET `/football/teams/{team_id}/players`
+**Get full team squad**
+
+Returns all players assigned to the club (players.teamid), up to 100, with extended profile fields. Omits deceased and usercount.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `team_id` | string | Yes | Example: `tm_0406` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "pl_29627593",
+      "name": "Alexander Isak",
+      "first_name": "Alexander",
+      "last_name": "Isak",
+      "position": "M",
+      "date_of_birth": "1994-09-08T00:00:00.000Z",
+      "age": 29,
+      "nationality": "Sweden",
+      "height_cm": 179,
+      "current_team": {
+        "id": "tm_0406",
+        "name": "Liverpool",
+        "jersey_number": 18
+      },
+      "slug": "player-name-pl_29627593",
+      "short_name": "A. Isak",
+      "preferred_foot": "right",
+      "gender": <string | null>,
+      "country_slug": <string | null>,
+      "market_value": <number | null>,
+      "contract_until": <string (date) | null>,
+      "national_team": {
+        "id": "tm_86978",
+        "name": "Sweden"
+      }
+    }
+  ]
+}
+```
+
+#### GET `/football/teams/{team_id}/injuries-suspensions`
+**Get team injuries and suspensions**
+
+Returns all injury and suspension records for the team, grouped by kind.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `team_id` | string | Yes | Example is Real Madrid.. Example: `tm_73673` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "injuries": [
+      {
+        "player_id": "pl_215956",
+        "status": "out",
+        "reason": "muscle_injury",
+        "start_date": "2026-05-22T00:00:00.000Z",
+        "expected_return": "2026-07-20T00:00:00.000Z",
+        "active": true
+      }
+    ],
+    "suspensions": [
+      {
+        "player_id": "pl_215956",
+        "reason": "yellow_card_accumulation_suspension",
+        "matches": 1,
+        "competition": {
+          "id": "comp_242",
+          "name": "MLS"
+        },
+        "start_date": "2026-06-01T00:00:00.000Z",
+        "end_date": "2026-07-24T00:00:00.000Z",
+        "active": true
+      }
+    ]
+  }
+}
+```
+
+#### GET `/football/teams/{team_id}`
+**Get team details**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `team_id` | string | Yes | Example: `tm_0406` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": "tm_0406",
+    "name": "Liverpool",
+    "short_name": "Man Utd",
+    "country": "England",
+    "primary_competition": {
+      "id": "comp_3039",
+      "name": "Premier League"
+    },
+    "stadium": {
+      "name": "Anfield",
+      "capacity": 61276,
+      "city": "Liverpool"
+    }
+  }
+}
+```
+
+#### GET `/football/teams/{team_id}/stats`
+**Get team statistics**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `team_id` | string | Yes | Example: `tm_0406` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `season_id` | string | Yes |  | Example: `sn_6125938` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "team_id": "tm_0406",
+    "season_id": "sn_6125938",
+    "competition_id": "comp_3039",
+    "matches_played": 38,
+    "wins": 23,
+    "draws": 6,
+    "losses": 9,
+    "points": 75,
+    "position": 3,
+    "goals_for": 58,
+    "goals_against": 43,
+    "goal_difference": 15,
+    "form": "WWDLW"
+  }
+}
+```
+
+#### GET `/football/teams/{team_id}/standings`
+**Competitions + seasons where this team has standings**
+
+Returns one entry per competition where this team appears in
+standings, with all seasons nested inside. Useful for "this
+team's table history" UIs — clients can then call
+`/competitions/{competition_id}/seasons/{season_id}/standings`
+to fetch the actual table. Returns an empty array for teams
+that only play in knockout-only cups (FA Cup, …) or have no
+standings data anywhere. Seasons within each competition are
+sorted newest first; competitions are ordered by their most
+recent season's recency.
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `team_id` | string | Yes | Example: `tm_0406` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "competition": {
+        "id": "comp_7",
+        "name": "UEFA Champions League"
+      },
+      "seasons": [
+        {
+          "id": "sn_3057848",
+          "name": "UEFA Champions League 22/23",
+          "group_label": "A"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Matches
+Football matches
+
+#### GET `/football/matches`
+**List matches**
+
+Retrieve a paginated list of matches with optional filters. Use date/status filters to query past (e.g. finished) or upcoming fixtures.
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (default 1) |
+| `per_page` | integer | No | `20` | Results per page (default 20, max 100). The legacy alias `limit` is also accepted and behaves identically. |
+| `competition_id` | string | No |  | Filter by competition (optional). Example: `comp_3039` |
+| `season_id` | string | No |  | Filter by season (optional, requires competition_id). Example: `sn_6125938` |
+| `team_id` | string | No |  | Filter matches involving a specific team (optional). Example: `tm_0406` |
+| `date_from` | string (date) | No |  | Filter matches from this date onwards (optional, format YYYY-MM-DD) |
+| `date_to` | string (date) | No |  | Filter matches until this date (optional, format YYYY-MM-DD) |
+| `utc_offset` | string | No | `+00:00` | UTC offset for date interpretation (e.g. `+05:30`, `-04:00`). Must match the pattern `±HH:MM` with `HH ≤ 14` and `MM ≤ 59`. Defaults to `+00:00` (UTC). |
+| `matchday` | integer | No |  | Filter matches by matchday / round number (positive integer).. Example: `1` |
+| `status` | string — enum: `scheduled`, `live`, `finished`, `postponed`, `cancelled` | No |  | Filter by match status (optional). Values: `scheduled`, `live`, `finished`, `postponed`, `cancelled` |
+| `stage` | string — enum: `regular`, `playoff`, `all` | No | `all` | Restrict to a single stage of the competition. - `regular` — regular league/group stage only   (e.g. Championship 2025/26 returns 552 matches; promotion   playoffs and similar knockout fixtures are excluded). - `playoff` — only knockout/playoff/cup fixtures within the   competition (e.g. Champions League knockout rounds, FA Cup,   Championship promotion playoffs). - `all` (default) — no filter, returns every fixture under the   competition.. Values: `regular`, `playoff`, `all`. Example: `regular` |
+| `group` | string — enum: `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `L` | No |  | Filter by group letter (A–L, case-insensitive). Matches the trailing "Group X" suffix on the per-group tournament name (e.g. "FIFA World Cup, Group A"). **Requires `competition_id`** — using `group` without `competition_id` returns 400. Applies to FIFA World Cup, EURO, AFCON, pre-2024 UEFA Champions League group stage, etc.. Values: `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `L` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "mt_838955483",
+      "competition_id": "comp_3039",
+      "season_id": "sn_6125938",
+      "matchday": 20,
+      "stage_name": "round_of_16",
+      "group_label": "A",
+      "status": "finished",
+      "utc_date": "2024-01-15T15:00:00.000Z",
+      "home_team": {
+        "id": "tm_0406",
+        "name": "Liverpool"
+      },
+      "away_team": {
+        "id": "tm_1002",
+        "name": "Aston Villa"
+      },
+      "score": {
+        "home": 2,
+        "away": 1,
+        "final_score": {
+          "home": 5,
+          "away": 4
+        },
+        "regulation": {
+          "home": 1,
+          "away": 1
+        },
+        "after_extra_time": {
+          "home": 1,
+          "away": 1
+        },
+        "penalty_shootout": {
+          "home": 3,
+          "away": 4
+        },
+        "went_to_extra_time": true,
+        "went_to_penalties": true,
+        "winner": "away"
+      },
+      "odds_available": true,
+      "live_odds_available": true,
+      "xg_available": true
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 100,
+    "total_pages": 5
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}`
+**Get match details**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": "mt_838955483",
+    "competition_id": "comp_3039",
+    "competition_name": "Premier League",
+    "season_id": "sn_6125938",
+    "matchday": 20,
+    "stage_name": "final",
+    "group_label": "A",
+    "status": "finished",
+    "utc_date": "2024-01-15T15:00:00.000Z",
+    "home_team": {
+      "id": "tm_0406",
+      "name": "Liverpool"
+    },
+    "away_team": {
+      "id": "tm_1002",
+      "name": "Aston Villa"
+    },
+    "score": {
+      "home": 2,
+      "away": 1,
+      "final_score": {
+        "home": 5,
+        "away": 4
+      },
+      "regulation": {
+        "home": 1,
+        "away": 1
+      },
+      "after_extra_time": {
+        "home": 1,
+        "away": 1
+      },
+      "penalty_shootout": {
+        "home": 3,
+        "away": 4
+      },
+      "went_to_extra_time": true,
+      "went_to_penalties": true,
+      "winner": "away",
+      "half_time_home": 1,
+      "half_time_away": 0
+    },
+    "venue": {
+      "name": "Anfield",
+      "city": "Liverpool"
+    },
+    "referee": {
+      "id": "ref_7264609",
+      "name": "Michael Oliver"
+    },
+    "odds_available": true,
+    "live_odds_available": true,
+    "xg_available": true
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/referee`
+**Get match referee**
+
+Returns the referee assigned to the match with career summary stats. `referee` is null when no referee is assigned.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "referee": {
+      "id": "ref_7264609",
+      "name": "Michael Oliver",
+      "slug": <string | null>,
+      "country": <string>,
+      "country_code": <string | null>,
+      "country_slug": <string | null>,
+      "career": {
+        "games": <integer>,
+        "yellow_cards": <integer>,
+        "red_cards": <integer>,
+        "yellow_red_cards": <integer>
+      }
+    }
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/stats`
+**Get match statistics**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "overview": {
+      "ball_possession": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "expected_goals": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "big_chances": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "total_shots": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "shots_on_target": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "goalkeeper_saves": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "corner_kicks": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "fouls": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "yellow_cards": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "red_cards": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "passes": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "accurate_passes": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "tackles": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "free_kicks": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "shots": {
+      "total_shots": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "shots_on_target": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "shots_off_target": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "blocked_shots": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "shots_inside_box": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "shots_outside_box": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "hit_woodwork": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "attack": {
+      "big_chances_missed": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "touches_in_penalty_area": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "fouled_in_final_third": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "offsides": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "passes": {
+      "accurate_passes": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "throw_ins": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "accurate_crosses": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "accurate_long_balls": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "final_third_entries": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "duels": {
+      "duels_won_percentage": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "dispossessed": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "dribbles_percentage": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "ground_duels_percentage": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "aerial_duels_percentage": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "defending": {
+      "tackles": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "tackles_won_percentage": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "interceptions": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "clearances": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "ball_recoveries": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "goalkeeping": {
+      "saves": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "goal_kicks": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "goals_prevented": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      },
+      "high_claims": {
+        "all": {
+          "home": <number>,
+          "away": <number>
+        },
+        "first_half": {
+          "home": <number>,
+          "away": <number>
+        },
+        "second_half": {
+          "home": <number>,
+          "away": <number>
+        }
+      }
+    },
+    "np_expected_goals": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/live-stats`
+**Get live in-match statistics**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "meta": {
+      "match_status": "second_half",
+      "elapsed_minutes": 22,
+      "home_goals": 0,
+      "away_goals": 0,
+      "ht_score": null,
+      "period": "first_half"
+    },
+    "stats": {
+      "ball_possession": {
+        "all": {
+          "home": 48,
+          "away": 52
+        }
+      },
+      "total_shots": {
+        "all": {
+          "home": 7,
+          "away": 9
+        }
+      },
+      "corner_kicks": {
+        "all": {
+          "home": 4,
+          "away": 5
+        }
+      }
+    }
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/player-stats`
+**Get match player statistics**
+
+Retrieve per-player statistics for a specific match, grouped by passing, shooting, defending, and general stats. Returns `409` while the match is live — use `live-player-stats` instead.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `player_ids` | string | No |  | Comma-separated list of player IDs to filter stats for specific players. Example: `pl_29627593,pl_7922290,pl_08984824` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "player_id": "pl_29627593",
+      "player_name": "Mohamed Salah",
+      "team_id": "tm_0406",
+      "position": "F",
+      "rating": 8.2,
+      "minutes_played": 90,
+      "started": true,
+      "played": true,
+      "passing": {
+        "total_passes": <integer>,
+        "accurate_passes": <integer>,
+        "key_passes": <integer>,
+        "assists": <integer>,
+        "total_crosses": <integer>,
+        "accurate_crosses": <integer>,
+        "total_long_balls": <integer>,
+        "accurate_long_balls": <integer>
+      },
+      "shooting": {
+        "goals": <integer>,
+        "total_shots": <integer>,
+        "shots_on_target": <integer>,
+        "shots_off_target": <integer>,
+        "blocked_shots": <integer>,
+        "big_chances_created": <integer>,
+        "expected_goals": <number | null>,
+        "expected_assists": <number | null>,
+        "np_expected_goals": <number | null>
+      },
+      "duels": {
+        "duel_won": <integer>,
+        "duel_lost": <integer>,
+        "aerial_won": <integer>,
+        "challenge_lost": <integer>,
+        "won_contest": <integer>,
+        "dispossessed": <integer>
+      },
+      "defending": {
+        "tackles": <integer>,
+        "interceptions": <integer>,
+        "clearances": <integer>
+      },
+      "goalkeeping": {
+        "saves": <integer>
+      },
+      "general": {
+        "touches": <integer>,
+        "fouls": <integer>,
+        "was_fouled": <integer>,
+        "offsides": <integer>,
+        "yellow_cards": <integer>,
+        "red_cards": <integer>,
+        "possession_lost": <integer>,
+        "player_subbed_on": "pl_57344297",
+        "player_subbed_off": "pl_29627593"
+      }
+    }
+  ]
+}
+```
+
+#### GET `/football/matches/{match_id}/live-player-stats`
+**Get live match player statistics**
+
+Per-player statistics while the match is live, with `meta.match_status = "live"`. Returns `409` when the match is not live.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `player_ids` | string | No |  | Comma-separated list of player IDs to filter stats for specific players. Example: `pl_29627593,pl_7922290,pl_08984824` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "player_id": "pl_29627593",
+      "player_name": "Mohamed Salah",
+      "team_id": "tm_0406",
+      "position": "F",
+      "rating": 8.2,
+      "minutes_played": 90,
+      "started": true,
+      "played": true,
+      "passing": {
+        "total_passes": <integer>,
+        "accurate_passes": <integer>,
+        "key_passes": <integer>,
+        "assists": <integer>,
+        "total_crosses": <integer>,
+        "accurate_crosses": <integer>,
+        "total_long_balls": <integer>,
+        "accurate_long_balls": <integer>
+      },
+      "shooting": {
+        "goals": <integer>,
+        "total_shots": <integer>,
+        "shots_on_target": <integer>,
+        "shots_off_target": <integer>,
+        "blocked_shots": <integer>,
+        "big_chances_created": <integer>,
+        "expected_goals": <number | null>,
+        "expected_assists": <number | null>,
+        "np_expected_goals": <number | null>
+      },
+      "duels": {
+        "duel_won": <integer>,
+        "duel_lost": <integer>,
+        "aerial_won": <integer>,
+        "challenge_lost": <integer>,
+        "won_contest": <integer>,
+        "dispossessed": <integer>
+      },
+      "defending": {
+        "tackles": <integer>,
+        "interceptions": <integer>,
+        "clearances": <integer>
+      },
+      "goalkeeping": {
+        "saves": <integer>
+      },
+      "general": {
+        "touches": <integer>,
+        "fouls": <integer>,
+        "was_fouled": <integer>,
+        "offsides": <integer>,
+        "yellow_cards": <integer>,
+        "red_cards": <integer>,
+        "possession_lost": <integer>,
+        "player_subbed_on": "pl_57344297",
+        "player_subbed_off": "pl_29627593"
+      }
+    }
+  ],
+  "meta": {
+    "match_status": "live"
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/lineups`
+**Get match lineups**
+
+Team sheets for a match. For finished and in-progress matches: returns
+the actual starting XI plus substitutes (both subs who came on and
+unused bench players), with formations sourced from the post-match
+record. For upcoming matches: returns the confirmed starting XI once
+the official team sheet has been announced (≈1 h before kickoff);
+speculative pre-announcement predictions are not exposed. Returns 404
+if the lineup has not been announced yet.
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "confirmed": <boolean>,
+    "home": {
+      "id": "tm_0406",
+      "name": "Liverpool",
+      "formation": "4-3-3",
+      "starting_xi": [
+        {
+          "id": "pl_29627593",
+          "name": "Mohamed Salah",
+          "position": "G",
+          "jersey_number": 1
+        }
+      ],
+      "substitutes": [
+        {
+          "id": "pl_29627593",
+          "name": "Mohamed Salah",
+          "position": "G",
+          "jersey_number": 1
+        }
+      ]
+    },
+    "away": {
+      "id": "tm_0406",
+      "name": "Liverpool",
+      "formation": "4-3-3",
+      "starting_xi": [
+        {
+          "id": "pl_29627593",
+          "name": "Mohamed Salah",
+          "position": "G",
+          "jersey_number": 1
+        }
+      ],
+      "substitutes": [
+        {
+          "id": "pl_29627593",
+          "name": "Mohamed Salah",
+          "position": "G",
+          "jersey_number": 1
+        }
+      ]
+    }
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/players/{player_id}/heatmap`
+**Get player heatmap for a match**
+
+Heatmap points (`x`, `y` in 0–100 pitch coordinates) for one player
+in one match. Each point marks a location where the player touched
+the ball during the match. Returns 404 when no heatmap is available
+(e.g. unused substitute, or a fixture without movement coverage).
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_404012971` |
+| `player_id` | string | Yes | Example: `pl_84027040` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_404012971",
+    "player": {
+      "id": "pl_84027040",
+      "name": "Dušan Vlahović"
+    },
+    "team": {
+      "id": "tm_5025",
+      "name": "Juventus",
+      "side": "home"
+    },
+    "points": [
+      {
+        "x": 41,
+        "y": 9
+      }
+    ]
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/shotmap`
+**Get match shotmap**
+
+Retrieve every shot taken in a match, along with per-shot metadata (xG, body part, situation, coordinates, derived flags) and an aggregated non-penalty xG summary for both teams.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `player_id` | string | No |  | Filter the shot list to a single player. Example: `pl_29627593` |
+
+**Response (200):**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "event": {
+    "id": "mt_838955483",
+    "home_team_id": "tm_0406",
+    "away_team_id": "tm_1002"
+  },
+  "data": [
+    {
+      "id": "sh_4812",
+      "player_id": "pl_29627593",
+      "player_name": "Mohamed Salah",
+      "team_id": "tm_0406",
+      "team_name": "Liverpool",
+      "x": 62.1,
+      "y": 88.3,
+      "minute": 24,
+      "result": "goal",
+      "expected_goals": 0.47,
+      "situation": "regular",
+      "body_part": "right_foot",
+      "goal_type": "regular",
+      "goal_mouth_location": "high_left",
+      "goal_mouth_coordinates": {
+        "x": <number>,
+        "y": <number>,
+        "z": <number>
+      },
+      "block_coordinates": {
+        "x": <number>,
+        "y": <number>,
+        "z": <number>
+      },
+      "is_blocked_shot": <boolean>,
+      "blocked_by_player_id": "pl_08984824",
+      "goalkeeper": {
+        "id": "pl_29627593",
+        "name": "Manuel Neuer"
+      },
+      "is_goal": <boolean>,
+      "is_on_target": <boolean>,
+      "is_headed": <boolean>,
+      "is_outside_box": <boolean>,
+      "is_penalty": <boolean>
+    }
+  ],
+  "np_xg_summary": {
+    "live": {
+      "home_team": 1.45,
+      "away_team": 0.82
+    },
+    "stored": {
+      "home_team": 1.45,
+      "away_team": 0.82
+    }
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/timeline`
+**Get match event timeline**
+
+Chronological, event-by-event timeline for a single match. Events are sorted in true match order (sequence 1 = first event of the match) and cover goals, shots (on/off target, blocked), fouls, offsides, corners, cards, substitutions, penalties, VAR reviews, and period markers. Each event carries a normalized `type` and the team and player when applicable.
+
+Stoppage time is preserved: an event at minute 45+3 is reported as `{ "minute": 45, "extra_time": 3 }` so clients can render `45+3'` directly.
+
+When a timeline is not available for the match, the endpoint returns `200` with an empty `events` array and `meta.coverage = "none"` plus a `reason` describing why: `match_not_started` (kickoff hasn't happened yet), `no_events` (no timeline data is available for this match), or `not_supported` (this match's competition is not covered by the timeline endpoint). A 404 is only returned when the match itself does not exist. Returns `409` while the match is live — use `live-timeline` instead.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `event_type` | string | No |  | Comma-separated list of event types to include. Defaults to all types. Unknown values return 400.. Example: `goal,yellow_card,foul` |
+| `period` | string | No |  | Comma-separated list of periods to include (`first_half`, `second_half`, `extra_time_first_half`, `extra_time_second_half`, `penalties`).. Example: `first_half,second_half` |
+| `team_id` | string | No |  | Filter to events involving a single team.. Example: `tm_0406` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "coverage": "full",
+    "events": [
+      {
+        "sequence": 8,
+        "minute": 45,
+        "extra_time": 3,
+        "period": "first_half",
+        "type": "goal",
+        "team": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        },
+        "player": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "total": 312,
+    "coverage": "full",
+    "reason": "match_not_started",
+    "last_updated": "2026-05-22T14:00:00.000Z"
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/live-timeline`
+**Get live match event timeline**
+
+Event timeline while the match is live, with `meta.match_status = "live"`. Returns `409` when the match is not live.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `event_type` | string | No |  | Comma-separated list of event types to include. Defaults to all types. Unknown values return 400.. Example: `goal,yellow_card,foul` |
+| `period` | string | No |  | Comma-separated list of periods to include (`first_half`, `second_half`, `extra_time_first_half`, `extra_time_second_half`, `penalties`).. Example: `first_half,second_half` |
+| `team_id` | string | No |  | Filter to events involving a single team.. Example: `tm_0406` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "coverage": "full",
+    "events": [
+      {
+        "sequence": 8,
+        "minute": 45,
+        "extra_time": 3,
+        "period": "first_half",
+        "type": "goal",
+        "team": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        },
+        "player": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "match_status": "live"
+  }
+}
+```
+
+### Players
+Football players
+
+#### GET `/football/players`
+**List players**
+
+Retrieve a paginated list of players with optional filters
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (default 1) |
+| `per_page` | integer | No | `20` | Results per page (default 20, max 100). The legacy alias `limit` is also accepted and behaves identically. |
+| `team_id` | string | No |  | Filter by team (optional). Example: `tm_0406` |
+| `position` | string | No |  | Filter by position (optional) |
+| `search` | string | No |  | Search players by name (case-insensitive partial match). Example: `Salah` |
+| `player_ids` | string | No |  | Comma-separated list of player IDs to fetch specific players. Example: `pl_29627593,pl_7922290,pl_08984824` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "pl_29627593",
+      "name": "Alexander Isak",
+      "first_name": "Alexander",
+      "last_name": "Isak",
+      "position": "M",
+      "date_of_birth": "1994-09-08T00:00:00.000Z",
+      "age": 29,
+      "nationality": "Sweden",
+      "height_cm": 179,
+      "current_team": {
+        "id": "tm_0406",
+        "name": "Liverpool",
+        "jersey_number": 18
+      }
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 100,
+    "total_pages": 5
+  }
+}
+```
+
+#### GET `/football/players/{player_id}`
+**Get player details**
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `player_id` | string | Yes | Example: `pl_29627593` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": "pl_29627593",
+    "name": "Alexander Isak",
+    "first_name": "Alexander",
+    "last_name": "Isak",
+    "position": "M",
+    "date_of_birth": "1994-09-08T00:00:00.000Z",
+    "age": 29,
+    "nationality": "Sweden",
+    "height_cm": 179,
+    "current_team": {
+      "id": "tm_0406",
+      "name": "Liverpool",
+      "jersey_number": 18
+    }
+  }
+}
+```
+
+#### GET `/football/players/{player_id}/injuries-suspensions`
+**Get player injuries and suspensions**
+
+Returns all injury and suspension records for the player, grouped by kind.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `player_id` | string | Yes | Example: `pl_29627593` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "injuries": [
+      {
+        "player_id": "pl_215956",
+        "status": "out",
+        "reason": "muscle_injury",
+        "start_date": "2026-05-22T00:00:00.000Z",
+        "expected_return": "2026-07-20T00:00:00.000Z",
+        "active": true
+      }
+    ],
+    "suspensions": [
+      {
+        "player_id": "pl_215956",
+        "reason": "yellow_card_accumulation_suspension",
+        "matches": 1,
+        "competition": {
+          "id": "comp_242",
+          "name": "MLS"
+        },
+        "start_date": "2026-06-01T00:00:00.000Z",
+        "end_date": "2026-07-24T00:00:00.000Z",
+        "active": true
+      }
+    ]
+  }
+}
+```
+
+#### GET `/football/players/{player_id}/stats`
+**Get player statistics**
+
+Retrieve statistics for a player in a specific season
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `player_id` | string | Yes | Unique identifier for the player. Example: `pl_29627593` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `season_id` | string | Yes |  | Season identifier (required). Example: `sn_6125938` |
+| `competition_id` | string | No |  | Filter statistics by competition (optional). Example: `comp_3039` |
+| `stage` | string — enum: `regular`, `playoff`, `all` | No | `all` | Restrict statistics to a single stage of the competition. - `regular` — regular league/group stage only (excludes playoff   fixtures that share the same `competition_id`). - `playoff` — knockout/playoff/cup stage only. - `all` (default) — every fixture the player appeared in for the   given season/competition.. Values: `regular`, `playoff`, `all`. Example: `regular` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "player_id": "pl_29627593",
+    "season_id": "sn_6125938",
+    "team_id": "tm_0406",
+    "position": "M",
+    "rating": 7.24,
+    "appearances": 37,
+    "starts": 35,
+    "minutes_played": 3120,
+    "scoring": {
+      "goals": <integer>,
+      "assists": <integer>,
+      "goals_assists_sum": <integer>,
+      "goal_conversion_percentage": <number>,
+      "penalties_taken": <integer>,
+      "penalty_goals": <integer>,
+      "big_chances_created": <integer>,
+      "big_chances_missed": <integer>
+    },
+    "shooting": {
+      "total_shots": <integer>,
+      "shots_on_target": <integer>,
+      "shots_off_target": <integer>
+    },
+    "passing": {
+      "total_passes": <integer>,
+      "accurate_passes": <integer>,
+      "inaccurate_passes": <integer>,
+      "pass_accuracy": <number>,
+      "key_passes": <integer>,
+      "accurate_crosses": <integer>,
+      "accurate_crosses_percentage": <number>,
+      "accurate_own_half_passes": <integer>,
+      "accurate_opposition_half_passes": <integer>,
+      "accurate_final_third_passes": <integer>
+    },
+    "defending": {
+      "tackles": <integer>,
+      "interceptions": <integer>
+    },
+    "duels": {
+      "ground_duels_won": <integer>,
+      "ground_duels_won_percentage": <number | null>,
+      "aerial_duels_won": <integer>,
+      "aerial_duels_won_percentage": <number | null>,
+      "total_duels_won": <integer>,
+      "total_duels_won_percentage": <number | null>,
+      "successful_dribbles": <integer>,
+      "successful_dribbles_percentage": <number | null>
+    },
+    "discipline": {
+      "yellow_cards": <integer>,
+      "red_cards": <integer>,
+      "direct_red_cards": <integer>,
+      "penalty_won": <integer>,
+      "penalty_conceded": <integer>
+    }
+  }
+}
+```
+
+#### GET `/football/players/{player_id}/competitions/{competition_id}/seasons/{season_id}/heatmap`
+**Get player season heatmap**
+
+Aggregated positional heatmap for a player across all matches they
+played in a single (competition, season). Each point is `{x, y,
+count}` where `count` is the number of touches at that grid cell.
+For group-stage tournaments (FIFA World Cup, EURO, …) one heatmap
+covers the entire tournament — group + knockout matches are merged
+into a single map. Returns 404 when no heatmap is available
+(e.g. season not yet played, or competition without coverage).
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `player_id` | string | Yes | Example: `pl_84027040` |
+| `competition_id` | string | Yes | Example: `comp_6107` |
+| `season_id` | string | Yes | Example: `sn_326766` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "player": {
+      "id": "pl_84027040",
+      "name": "Dušan Vlahović"
+    },
+    "competition": {
+      "id": "comp_6107",
+      "name": "FIFA World Cup"
+    },
+    "season": {
+      "id": "sn_326766",
+      "name": "2022"
+    },
+    "points": [
+      {
+        "x": 41,
+        "y": 73,
+        "count": 3
+      }
+    ]
+  }
+}
+```
+
+### Odds
+Betting odds for football matches
+
+#### GET `/football/matches/{match_id}/odds`
+**Get match odds**
+
+Retrieve odds for a match, one entry per bookmaker (Bet365, Paddy Power, BetMGM UK, Pinnacle, Betfair Exchange), across all available markets — match result (full/half), BTTS variants, goals/corners/cards lines, Asian and European handicaps, team totals, shots markets, correct score, qualification and penalty specials — with opening and last-seen values. Every bookmaker entry shares the same markets shape; a market appears only when that bookmaker prices it for the match. Available for upcoming and finished matches where odds were captured.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `bookmaker` | string | No |  | Optional comma-separated list of bookmaker slugs to narrow the response to. Available values: `bet365`, `paddy-power`, `betmgm-uk`, `pinnacle`, `betfair-exchange`. Omit to return every available bookmaker. Unknown slugs return 400. A match that has odds but not from the requested bookmaker(s) returns 200 with an empty `bookmakers` array.. Example: `bet365,pinnacle` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "bookmakers": [
+      {
+        "bookmaker": "Bet365",
+        "markets": {
+          "match_odds": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "btts": {
+            "yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "total_goals": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "match_corners": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "total_cards": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "asian_handicap": {
+            "home": {
+              "-0.5": {
+                "opening": null,
+                "last_seen": "3.780"
+              },
+              "+0.0": {
+                "opening": null,
+                "last_seen": "2.720"
+              }
+            },
+            "away": {
+              "+0.5": {
+                "opening": null,
+                "last_seen": "1.290"
+              },
+              "+0.0": {
+                "opening": null,
+                "last_seen": "1.500"
+              }
+            }
+          },
+          "draw_no_bet": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "double_chance": {
+            "home_draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "home_away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw_away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "first_half_result": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "first_team_to_score": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "none": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "second_half_result": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "half_time_double_chance": {
+            "home_draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "home_away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw_away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "handicap_result": {
+            "<key>": {
+              "home": { ... },
+              "draw": { ... },
+              "away": { ... }
+            }
+          },
+          "team_total_goals": {
+            "home": {
+              "<key>": { ... }
+            },
+            "away": {
+              "<key>": { ... }
+            }
+          },
+          "btts_first_half": {
+            "yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "btts_second_half": {
+            "yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "total_goals_btts": {
+            "<key>": {
+              "over_yes": { ... },
+              "over_no": { ... },
+              "under_yes": { ... },
+              "under_no": { ... }
+            }
+          },
+          "match_shots": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "match_shots_on_target": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "team_shots": {
+            "home": {
+              "<key>": { ... }
+            },
+            "away": {
+              "<key>": { ... }
+            }
+          },
+          "team_shots_on_target": {
+            "home": {
+              "<key>": { ... }
+            },
+            "away": {
+              "<key>": { ... }
+            }
+          },
+          "team_corners": {
+            "home": {
+              "<key>": { ... }
+            },
+            "away": {
+              "<key>": { ... }
+            }
+          },
+          "correct_score": {
+            "<key>": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "to_qualify": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "a_penalty_in_match": {
+            "yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "to_score_a_penalty": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          },
+          "to_miss_a_penalty": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/odds/live`
+**Get live match odds**
+
+Retrieve in-play odds for a match across all key markets (Match Result, BTTS, Total Goals, Corners, Asian Handicap) with last-seen values
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_838955483` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "bookmakers": [
+      {
+        "bookmaker": "Bet365",
+        "markets": {
+          "match_odds": {
+            "home": {
+              "live": "1.810"
+            },
+            "draw": {
+              "live": "1.810"
+            },
+            "away": {
+              "live": "1.810"
+            }
+          },
+          "total_goals": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "asian_handicap": {
+            "home": {
+              "-0.5": {
+                "live": "2.670"
+              },
+              "+0.0": {
+                "live": "1.750"
+              }
+            },
+            "away": {
+              "+0.5": {
+                "live": "1.450"
+              },
+              "+0.0": {
+                "live": "2.050"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### GET `/football/matches/{match_id}/odds/players`
+**Get player-prop odds for a match**
+
+Latest player-prop odds for a match from a single bookmaker, grouped
+by market. Within each market, entries are sorted by line ascending
+(nulls last), then market_type ascending (`Over` before `Under`),
+then odd ascending (favourites first), then name ascending.
+
+Ladder markets (`player_shots`, `player_shots_on_target`,
+`player_assists`) emit one entry per `(player × line × market_type)`
+— a player priced at Over 0.5, Over 1.5, and Over 2.5 yields three
+entries; if both Over and Under at the same line are priced you
+get one of each. Flat markets (`anytime_goalscorer`) emit one
+entry per player at the implicit line (0.5). `first_goalscorer`
+has no line or direction concept; both `line` and `market_type`
+are `null`.
+
+Bet365 prices Over almost exclusively on player props today.
+`Under` entries surface once a book that quotes them is added.
+
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `match_id` | string | Yes | Example: `mt_404012971` |
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `markets` | string | No |  | Comma-separated list of player-prop market keys. Available values: `anytime_goalscorer`, `first_goalscorer`, `player_shots`, `player_shots_on_target`, `player_assists`. Defaults to **all available markets** when omitted. Unknown values return 400. |
+| `bookmaker` | string — enum: `bet365` | No | `bet365` | Bookmaker. Defaults to `bet365`.. Values: `bet365` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "match_id": "mt_404012971",
+    "home_team": {
+      "id": "tm_7355123",
+      "name": "Comerciantes Unidos"
+    },
+    "away_team": {
+      "id": "tm_7355123",
+      "name": "Comerciantes Unidos"
+    },
+    "kickoff_at": "2026-05-25T20:30:00.000Z",
+    "bookmaker": "bet365",
+    "markets": [
+      {
+        "name": "anytime_goalscorer",
+        "players": [
+          {
+            "id": "pl_29627593",
+            "name": "Mohamed Salah",
+            "line": 1.5,
+            "market_type": "Over",
+            "odd": 1.85
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Coverage
+Data coverage per competition and season — which data types exist and how complete they are
+
+#### GET `/coverage/leagues`
+**List data coverage per competition**
+
+One row per competition with seasons covered, which data types have data, latest-season status, and total finished events. Counts are derived from events stored in the database (status finished/ended); season totals exclude postponed/cancelled rows superseded by a rescheduled fixture, matching /football/matches. Data only changes after backfill runs — responses are cached for several hours.
+
+**Query parameters:**
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `page` | integer | No | `1` | Page number (default 1) |
+| `per_page` | integer | No | `100` | Items per page (default 100, max 200) |
+| `data_type` | string — enum: `fixtures`, `team_stats`, `xg`, `odds`, `lineups`, `player_stats`, `standings` | No |  | Only competitions where this data type has data. Values: `fixtures`, `team_stats`, `xg`, `odds`, `lineups`, `player_stats`, `standings` |
+| `search` | string | No |  | Search competitions by name (case-insensitive partial match). Example: `Premier` |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "comp_3039",
+      "name": "Premier League",
+      "country": "England",
+      "country_code": "GB",
+      "seasons": {
+        "count": 12,
+        "first": {
+          "id": "sn_2210",
+          "year": "25/26"
+        },
+        "last": {
+          "id": "sn_2210",
+          "year": "25/26"
+        }
+      },
+      "data_types": {
+        "fixtures": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "team_stats": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "xg": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "odds": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "lineups": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "player_stats": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "standings": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "<key>": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        }
+      },
+      "latest_season": {
+        "id": "sn_2210",
+        "year": "25/26",
+        "status": <string>,
+        "finished_events": 220,
+        "total_events": 380
+      },
+      "total_finished_events": 4560
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 20,
+    "total": 100,
+    "total_pages": 5
+  }
+}
+```
+
+#### GET `/coverage/leagues/{competition_id}`
+**Per-season data coverage for one competition**
+
+Season-by-season breakdown (newest first) — finished vs total stored events, a derived status, and per-data-type coverage counts across finished events. The data_types object is extensible; clients must tolerate new keys.
+
+**Path parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `competition_id` | string | Yes | Example: `comp_3039` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": "comp_3039",
+    "name": "Premier League",
+    "country": "England",
+    "country_code": "GB",
+    "total_seasons": 33,
+    "loaded_seasons": 12,
+    "total_finished_events": 4560,
+    "seasons": [
+      {
+        "id": "sn_2210",
+        "name": "Premier League 25/26",
+        "year": "25/26",
+        "status": <string>,
+        "events": {
+          "finished": 220,
+          "total": 380
+        },
+        "data_types": {
+          "fixtures": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "team_stats": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "xg": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "odds": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "lineups": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "player_stats": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "standings": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          },
+          "<key>": {
+            "available": <boolean>,
+            "covered_events": 218,
+            "coverage_pct": 99.1
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### GET `/coverage/summary`
+**Coverage totals**
+
+Headline totals for the coverage page — competitions, seasons, finished events, and season status buckets.
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "leagues": 214,
+    "seasons": 726,
+    "finished_events": 312450,
+    "seasons_by_status": {
+      "complete": 480,
+      "in_progress": 49,
+      "not_loaded": 197
+    },
+    "pct_complete": 66.1
+  }
+}
+```
+
+---
+
+## Models
+
+### Competition
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `comp_3039` |
+| `name` | string | Yes | e.g. `Premier League` |
+| `country` | string \| null | Yes | Country name. Null for international / continental competitions (UEFA Champions League, Copa Libertadores, …) — see `confederation`. |
+| `country_code` | string \| null | Yes | ISO-3166 alpha-2 country code (e.g. `GB`). Subdivisions are exposed via `subdivision_code` (`GB-ENG`, `GB-SCT`). Null for international competitions. |
+| `subdivision_code` | string \| null | Yes | ISO-3166-2 subdivision code where applicable. Set for English, Scottish, Welsh and Northern-Irish competitions (`GB-ENG`, `GB-SCT`, `GB-WLS`, `GB-NIR`); null otherwise. |
+| `confederation` | string \| null | Yes | Confederation tag for international competitions (`UEFA`, `CONMEBOL`, `FIFA`, `CAF`, `AFC`, `CONCACAF`, `OFC`). Null for domestic competitions. |
+| `type` | string — enum: `league`, `cup`, `tournament` | Yes | Values: `league`, `cup`, `tournament`. e.g. `league` |
+| `has_team_stats` | boolean | Yes | Indicates if team statistics are available for this competition |
+| `has_player_stats` | boolean | Yes | Indicates if player statistics are available for this competition |
+| `odds_available` | boolean | No | Indicates if betting odds are available for matches in this competition (prematch and historical closing lines where stored). |
+| `live_odds_available` | boolean | No | Indicates if live (in-play) odds are currently available for at least one match in this competition |
+| `xg_available` | boolean | No | Indicates if expected goals (xG) data is available with at least one non-zero value for this competition. |
+
+**Example:**
+
+```json
+{
+  "id": "comp_3039",
+  "name": "Premier League",
+  "country": "England",
+  "country_code": "GB",
+  "subdivision_code": "GB-ENG",
+  "confederation": null,
+  "type": "league",
+  "has_team_stats": true,
+  "has_player_stats": true,
+  "odds_available": true,
+  "live_odds_available": true,
+  "xg_available": true
+}
+```
+
+### CompetitionDetail
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `comp_3039` |
+| `name` | string | Yes | e.g. `Premier League` |
+| `country` | string \| null | Yes | Country name. Null for international / continental competitions (UEFA Champions League, Copa Libertadores, …) — see `confederation`. |
+| `country_code` | string \| null | Yes | ISO-3166 alpha-2 country code (e.g. `GB`). Subdivisions are exposed via `subdivision_code` (`GB-ENG`, `GB-SCT`). Null for international competitions. |
+| `subdivision_code` | string \| null | Yes | ISO-3166-2 subdivision code where applicable. Set for English, Scottish, Welsh and Northern-Irish competitions (`GB-ENG`, `GB-SCT`, `GB-WLS`, `GB-NIR`); null otherwise. |
+| `confederation` | string \| null | Yes | Confederation tag for international competitions (`UEFA`, `CONMEBOL`, `FIFA`, `CAF`, `AFC`, `CONCACAF`, `OFC`). Null for domestic competitions. |
+| `type` | string — enum: `league`, `cup`, `tournament` | Yes | Values: `league`, `cup`, `tournament`. e.g. `league` |
+| `has_team_stats` | boolean | Yes | Indicates if team statistics are available for this competition |
+| `has_player_stats` | boolean | Yes | Indicates if player statistics are available for this competition |
+| `odds_available` | boolean | No | Indicates if betting odds are available for matches in this competition (prematch and historical closing lines where stored). |
+| `live_odds_available` | boolean | No | Indicates if live (in-play) odds are currently available for at least one match in this competition |
+| `xg_available` | boolean | No | Indicates if expected goals (xG) data is available with at least one non-zero value for this competition. |
+| `current_season_id` | string \| null | No | Latest season ID for this competition. Null for dormant or retired competitions where no current season is known. |
+| `total_teams` | integer | No | e.g. `20` |
+
+**Example:**
+
+```json
+{
+  "id": "comp_3039",
+  "name": "Premier League",
+  "country": "England",
+  "country_code": "GB",
+  "subdivision_code": "GB-ENG",
+  "confederation": null,
+  "type": "league",
+  "has_team_stats": true,
+  "has_player_stats": true,
+  "odds_available": true,
+  "live_odds_available": true,
+  "xg_available": true,
+  "current_season_id": "sn_6125938",
+  "total_teams": 20
+}
+```
+
+### CompetitionSeason
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `sn_6125938` |
+| `name` | string | Yes | e.g. `Premier League 24/25` |
+| `year` | string | Yes | Display string (e.g. `2024` or `24/25`). |
+| `start_year` | integer \| null | Yes | First calendar year covered by the season (e.g. 2024 for `24/25`). Null when the year string can't be parsed. |
+| `end_year` | integer \| null | Yes | Last calendar year covered by the season (e.g. 2025 for `24/25`). |
+| `is_current` | boolean | Yes | True for the latest season row for this competition (same id as `current_season_id` on competition detail). |
+
+**Example:**
+
+```json
+{
+  "id": "sn_6125938",
+  "name": "Premier League 24/25",
+  "year": "24/25",
+  "start_year": 2024,
+  "end_year": 2025,
+  "is_current": <boolean>
+}
+```
+
+### CompetitionSeasonGroup
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `group_label` | string | Yes | Group letter (A–L). Can be passed back into `/football/matches?group=` to filter the group's fixtures. |
+| `name` | string | Yes | Ready-to-display group name (English). |
+
+**Example:**
+
+```json
+{
+  "group_label": "A",
+  "name": "Group A"
+}
+```
+
+### TeamStandingsCompetition
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `competition` | object { id, name } | Yes |  |
+| `seasons` | object { id, name, group_label }[] | Yes | Seasons (newest first) where this team has a standings row in this competition. `group_label` is the trailing letter (A–L) for group-stage tables, null for linear leagues. |
+
+**Example:**
+
+```json
+{
+  "competition": {
+    "id": "comp_7",
+    "name": "UEFA Champions League"
+  },
+  "seasons": [
+    {
+      "id": "sn_3057848",
+      "name": "UEFA Champions League 22/23",
+      "group_label": "A"
+    }
+  ]
+}
+```
+
+### Standing
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `team` | object { id, name } | Yes |  |
+| `position` | integer \| null | No | 1-indexed rank within the league or group. Null if not yet assigned (e.g. pre-tournament group rows). |
+| `matches_played` | integer | Yes | e.g. `38` |
+| `wins` | integer | Yes | e.g. `28` |
+| `draws` | integer | Yes | e.g. `7` |
+| `losses` | integer | Yes | e.g. `3` |
+| `goals_for` | integer | Yes | e.g. `96` |
+| `goals_against` | integer | Yes | e.g. `34` |
+| `goal_difference` | integer | Yes | Derived as `goals_for - goals_against`. |
+| `points` | integer | Yes | e.g. `91` |
+| `group_label` | string \| null | No | Group letter (A–L) for group-stage competitions; null for linear leagues. Pass back into `?group=` on this endpoint to filter to one group. |
+
+**Example:**
+
+```json
+{
+  "team": {
+    "id": "tm_0406",
+    "name": "Liverpool"
+  },
+  "position": 1,
+  "matches_played": 38,
+  "wins": 28,
+  "draws": 7,
+  "losses": 3,
+  "goals_for": 96,
+  "goals_against": 34,
+  "goal_difference": 62,
+  "points": 91,
+  "group_label": <string | null>
+}
+```
+
+### Team
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `tm_0406` |
+| `name` | string | Yes | e.g. `Liverpool` |
+| `short_name` | string | Yes | e.g. `Man Utd` |
+| `country` | string | Yes | e.g. `England` |
+| `primary_competition` | object { id, name } \| null | No |  |
+
+**Example:**
+
+```json
+{
+  "id": "tm_0406",
+  "name": "Liverpool",
+  "short_name": "Man Utd",
+  "country": "England",
+  "primary_competition": {
+    "id": "comp_3039",
+    "name": "Premier League"
+  }
+}
+```
+
+### TeamDetail
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `tm_0406` |
+| `name` | string | Yes | e.g. `Liverpool` |
+| `short_name` | string | Yes | e.g. `Man Utd` |
+| `country` | string | Yes | e.g. `England` |
+| `primary_competition` | object { id, name } \| null | No |  |
+| `stadium` | object { name, capacity, city } | No |  |
+
+**Example:**
+
+```json
+{
+  "id": "tm_0406",
+  "name": "Liverpool",
+  "short_name": "Man Utd",
+  "country": "England",
+  "primary_competition": {
+    "id": "comp_3039",
+    "name": "Premier League"
+  },
+  "stadium": {
+    "name": "Anfield",
+    "capacity": 61276,
+    "city": "Liverpool"
+  }
+}
+```
+
+### TeamStats
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `team_id` | string | Yes | e.g. `tm_0406` |
+| `season_id` | string | Yes | e.g. `sn_6125938` |
+| `competition_id` | string | Yes | e.g. `comp_3039` |
+| `matches_played` | integer | Yes | e.g. `38` |
+| `wins` | integer | Yes | e.g. `23` |
+| `draws` | integer | Yes | e.g. `6` |
+| `losses` | integer | Yes | e.g. `9` |
+| `points` | integer | Yes | e.g. `75` |
+| `position` | integer | Yes | e.g. `3` |
+| `goals_for` | integer | Yes | e.g. `58` |
+| `goals_against` | integer | Yes | e.g. `43` |
+| `goal_difference` | integer | Yes | e.g. `15` |
+| `form` | string | Yes | e.g. `WWDLW` |
+
+**Example:**
+
+```json
+{
+  "team_id": "tm_0406",
+  "season_id": "sn_6125938",
+  "competition_id": "comp_3039",
+  "matches_played": 38,
+  "wins": 23,
+  "draws": 6,
+  "losses": 9,
+  "points": 75,
+  "position": 3,
+  "goals_for": 58,
+  "goals_against": 43,
+  "goal_difference": 15,
+  "form": "WWDLW"
+}
+```
+
+### Match
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `mt_838955483` |
+| `competition_id` | string | Yes | e.g. `comp_3039` |
+| `season_id` | string | Yes | e.g. `sn_6125938` |
+| `matchday` | integer \| null | Yes | League matchday / round. Null for cup or knockout fixtures where the value is unavailable. Use `stage_name` for those instead. |
+| `stage_name` | string \| null | Yes | Named round for cup / knockout fixtures: `final`, `semi_final`, `quarter_final`, `round_of_16`, `round_of_32`, `round_of_64`, `knockout_playoff`, `group_stage`, `qualifying`. Null when the row is a regular league fixture. |
+| `group_label` | string \| null | No | Group letter (A–L) for group-stage fixtures in competitions that split the group stage across tournament rows — FIFA World Cup, EURO, AFCON, pre-2024 UEFA Champions League group stage. Null when the match's tournament name does not match a group pattern (regular league fixtures, knockout rounds, etc.). |
+| `status` | string — enum: `scheduled`, `live`, `finished`, `postponed`, `cancelled` | Yes | Values: `scheduled`, `live`, `finished`, `postponed`, `cancelled`. e.g. `finished` |
+| `utc_date` | string (date-time) | Yes | e.g. `"2024-01-15T15:00:00.000Z"` |
+| `home_team` | object { id, name } | Yes |  |
+| `away_team` | object { id, name } | Yes |  |
+| `score` | object { home, away, final_score, regulation, after_extra_time, penalty_shootout, went_to_extra_time, went_to_penalties, winner } | Yes | Score for the fixture. `home`/`away` use normal-time goals for finished matches and are null for matches that have not been played (`scheduled`, `postponed`, `cancelled`). For matches that went beyond 90 minutes, read the explicit breakdown: `regulation` (score at 90'), `after_extra_time` (score at 120'), `penalty_shootout` (shootout kicks), plus the `went_to_extra_time` / `went_to_penalties` flags and `winner`. |
+| `odds_available` | boolean | No | Indicates if betting odds are available for this match (prematch and historical closing lines where stored; supported competitions). Always `false` for `postponed` / `cancelled` matches even when stale odds rows exist. |
+| `live_odds_available` | boolean | No | Indicates if live (in-play) odds are currently available for this match. Always `false` for `postponed` / `cancelled` matches. |
+| `xg_available` | boolean | No | Indicates if expected goals (xG) data is available for this match. `true` only when at least one shotmap or aggregate xG row exists and contains non-zero data. |
+
+**Example:**
+
+```json
+{
+  "id": "mt_838955483",
+  "competition_id": "comp_3039",
+  "season_id": "sn_6125938",
+  "matchday": 20,
+  "stage_name": "round_of_16",
+  "group_label": "A",
+  "status": "finished",
+  "utc_date": "2024-01-15T15:00:00.000Z",
+  "home_team": {
+    "id": "tm_0406",
+    "name": "Liverpool"
+  },
+  "away_team": {
+    "id": "tm_1002",
+    "name": "Aston Villa"
+  },
+  "score": {
+    "home": 2,
+    "away": 1,
+    "final_score": {
+      "home": 5,
+      "away": 4
+    },
+    "regulation": {
+      "home": 1,
+      "away": 1
+    },
+    "after_extra_time": {
+      "home": 1,
+      "away": 1
+    },
+    "penalty_shootout": {
+      "home": 3,
+      "away": 4
+    },
+    "went_to_extra_time": true,
+    "went_to_penalties": true,
+    "winner": "away"
+  },
+  "odds_available": true,
+  "live_odds_available": true,
+  "xg_available": true
+}
+```
+
+### MatchDetail
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `mt_838955483` |
+| `competition_id` | string | No | e.g. `comp_3039` |
+| `competition_name` | string | No | e.g. `Premier League` |
+| `season_id` | string | No | e.g. `sn_6125938` |
+| `matchday` | integer \| null | No | League matchday / round. Null for cup or knockout fixtures. |
+| `stage_name` | string \| null | No | Named round for cup / knockout fixtures (`final`, `semi_final`, `quarter_final`, `round_of_16`, `round_of_32`, `round_of_64`, `knockout_playoff`, `group_stage`, `qualifying`). Null when the row is a regular league fixture. |
+| `group_label` | string \| null | No | Group letter (A–L) for group-stage fixtures in competitions that split the group stage across tournament rows — FIFA World Cup, EURO, AFCON, pre-2024 UEFA Champions League group stage. Null otherwise. |
+| `status` | string — enum: `scheduled`, `live`, `finished`, `postponed`, `cancelled` | No | Values: `scheduled`, `live`, `finished`, `postponed`, `cancelled`. e.g. `finished` |
+| `utc_date` | string (date-time) | No | e.g. `"2024-01-15T15:00:00.000Z"` |
+| `home_team` | object { id, name } | No |  |
+| `away_team` | object { id, name } | No |  |
+| `score` | object { home, away, final_score, regulation, after_extra_time, penalty_shootout, went_to_extra_time, went_to_penalties, winner, half_time_home, half_time_away } | No | Score; null fields for matches that have not been played. For matches that went beyond 90 minutes, read the explicit breakdown: `regulation`, `after_extra_time`, `penalty_shootout`, `went_to_extra_time` / `went_to_penalties` and `winner` — same semantics as `Match.score`. |
+| `venue` | object { name, city } \| null | No | Null for cancelled matches with no assigned venue. |
+| `referee` | object { id, name } \| null | No | Null when no referee is assigned to the match. |
+| `odds_available` | boolean | No | Indicates if betting odds are available for this match (prematch and historical closing lines where stored; supported competitions) |
+| `live_odds_available` | boolean | No | Indicates if live (in-play) odds are currently available for this match |
+| `xg_available` | boolean | No | Indicates if expected goals (xG) data is available for this match |
+
+**Example:**
+
+```json
+{
+  "id": "mt_838955483",
+  "competition_id": "comp_3039",
+  "competition_name": "Premier League",
+  "season_id": "sn_6125938",
+  "matchday": 20,
+  "stage_name": "final",
+  "group_label": "A",
+  "status": "finished",
+  "utc_date": "2024-01-15T15:00:00.000Z",
+  "home_team": {
+    "id": "tm_0406",
+    "name": "Liverpool"
+  },
+  "away_team": {
+    "id": "tm_1002",
+    "name": "Aston Villa"
+  },
+  "score": {
+    "home": 2,
+    "away": 1,
+    "final_score": {
+      "home": 5,
+      "away": 4
+    },
+    "regulation": {
+      "home": 1,
+      "away": 1
+    },
+    "after_extra_time": {
+      "home": 1,
+      "away": 1
+    },
+    "penalty_shootout": {
+      "home": 3,
+      "away": 4
+    },
+    "went_to_extra_time": true,
+    "went_to_penalties": true,
+    "winner": "away",
+    "half_time_home": 1,
+    "half_time_away": 0
+  },
+  "venue": {
+    "name": "Anfield",
+    "city": "Liverpool"
+  },
+  "referee": {
+    "id": "ref_7264609",
+    "name": "Michael Oliver"
+  },
+  "odds_available": true,
+  "live_odds_available": true,
+  "xg_available": true
+}
+```
+
+### MatchRefereeResponse
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | Yes | e.g. `mt_838955483` |
+| `referee` | object { id, name, slug, country, country_code, country_slug, career } \| null | Yes | Null when no referee is assigned to the match |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "referee": {
+    "id": "ref_7264609",
+    "name": "Michael Oliver",
+    "slug": <string | null>,
+    "country": <string>,
+    "country_code": <string | null>,
+    "country_slug": <string | null>,
+    "career": {
+      "games": <integer>,
+      "yellow_cards": <integer>,
+      "red_cards": <integer>,
+      "yellow_red_cards": <integer>
+    }
+  }
+}
+```
+
+### StatValue
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home` | number | No |  |
+| `away` | number | No |  |
+
+**Example:**
+
+```json
+{
+  "home": <number>,
+  "away": <number>
+}
+```
+
+### MatchStatItem
+
+Stat with full match and half-by-half breakdown. `first_half` and
+`second_half` are `null` when no real value is available for that
+period, so clients never see a `0` that contradicts `all`.
+
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `all` | [StatValue](#statvalue) | No |  |
+| `first_half` | [StatValue](#statvalue) \| null | No |  |
+| `second_half` | [StatValue](#statvalue) \| null | No |  |
+
+**Example:**
+
+```json
+{
+  "all": {
+    "home": <number>,
+    "away": <number>
+  },
+  "first_half": {
+    "home": <number>,
+    "away": <number>
+  },
+  "second_half": {
+    "home": <number>,
+    "away": <number>
+  }
+}
+```
+
+### MatchStats
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | No | e.g. `mt_838955483` |
+| `overview` | object { ball_possession, expected_goals, big_chances, total_shots, shots_on_target, goalkeeper_saves, corner_kicks, fouls, yellow_cards, red_cards, passes, accurate_passes, tackles, free_kicks } | No | Key match overview statistics |
+| `shots` | object { total_shots, shots_on_target, shots_off_target, blocked_shots, shots_inside_box, shots_outside_box, hit_woodwork } | No | Detailed shot statistics |
+| `attack` | object { big_chances_missed, touches_in_penalty_area, fouled_in_final_third, offsides } | No | Attacking statistics |
+| `passes` | object { accurate_passes, throw_ins, accurate_crosses, accurate_long_balls, final_third_entries } | No | Passing statistics |
+| `duels` | object { duels_won_percentage, dispossessed, dribbles_percentage, ground_duels_percentage, aerial_duels_percentage } | No | Duel statistics |
+| `defending` | object { tackles, tackles_won_percentage, interceptions, clearances, ball_recoveries } | No | Defending statistics |
+| `goalkeeping` | object { saves, goal_kicks, goals_prevented, high_claims } | No | Goalkeeping statistics |
+| `np_expected_goals` | [MatchStatItem](#matchstatitem) \| null | No | Non-penalty expected goals. `null` when neither stored npxG nor a non-penalty shot-xG fallback exists — never a fabricated `0`. |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "overview": {
+    "ball_possession": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "expected_goals": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "big_chances": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "total_shots": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "shots_on_target": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "goalkeeper_saves": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "corner_kicks": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "fouls": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "yellow_cards": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "red_cards": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "passes": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "accurate_passes": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "tackles": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "free_kicks": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "shots": {
+    "total_shots": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "shots_on_target": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "shots_off_target": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "blocked_shots": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "shots_inside_box": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "shots_outside_box": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "hit_woodwork": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "attack": {
+    "big_chances_missed": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "touches_in_penalty_area": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "fouled_in_final_third": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "offsides": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "passes": {
+    "accurate_passes": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "throw_ins": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "accurate_crosses": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "accurate_long_balls": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "final_third_entries": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "duels": {
+    "duels_won_percentage": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "dispossessed": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "dribbles_percentage": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "ground_duels_percentage": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "aerial_duels_percentage": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "defending": {
+    "tackles": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "tackles_won_percentage": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "interceptions": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "clearances": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "ball_recoveries": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "goalkeeping": {
+    "saves": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "goal_kicks": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "goals_prevented": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    },
+    "high_claims": {
+      "all": {
+        "home": <number>,
+        "away": <number>
+      },
+      "first_half": {
+        "home": <number>,
+        "away": <number>
+      },
+      "second_half": {
+        "home": <number>,
+        "away": <number>
+      }
+    }
+  },
+  "np_expected_goals": {
+    "all": {
+      "home": <number>,
+      "away": <number>
+    },
+    "first_half": {
+      "home": <number>,
+      "away": <number>
+    },
+    "second_half": {
+      "home": <number>,
+      "away": <number>
+    }
+  }
+}
+```
+
+### LiveMatchStatItem
+
+Live in-match statistic with full-match running tally.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `all` | [StatValue](#statvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "all": {
+    "home": <number>,
+    "away": <number>
+  }
+}
+```
+
+### LiveMatchStatsMeta
+
+Context describing when/how the live tick was sampled.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_status` | string — enum: `not_started`, `first_half`, `halftime`, `second_half`, `extra_time`, `penalties`, `finished`, `suspended`, `in_progress` \| null | No | Our normalized match status.. Values: `not_started`, `first_half`, `halftime`, `second_half`, `extra_time`, `penalties`, `finished`, `suspended`, `in_progress` |
+| `elapsed_minutes` | integer \| null | No | e.g. `22` |
+| `home_goals` | integer \| null | No | e.g. `0` |
+| `away_goals` | integer \| null | No | e.g. `0` |
+| `ht_score` | string \| null | No | e.g. `null` |
+| `period` | string — enum: `first_half`, `halftime`, `second_half`, `finished` \| null | No | Current phase of the match.. Values: `first_half`, `halftime`, `second_half`, `finished` |
+
+**Example:**
+
+```json
+{
+  "match_status": "second_half",
+  "elapsed_minutes": 22,
+  "home_goals": 0,
+  "away_goals": 0,
+  "ht_score": null,
+  "period": "first_half"
+}
+```
+
+### LiveMatchStats
+
+In-match live statistics for a fixture, kept separate from post-match canonical totals. Stat keys are our own normalized labels (the same vocabulary as the post-match `/stats` endpoint).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | No | e.g. `mt_838955483` |
+| `meta` | [LiveMatchStatsMeta](#livematchstatsmeta) | No |  |
+| `stats` | Map<string, [LiveMatchStatItem](#livematchstatitem)> | No | Live stats for the match, full-match running totals, keyed by our normalized stat label (e.g. `ball_possession`, `total_shots`, `corner_kicks`, `expected_goals`). Unmapped stats are omitted. |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "meta": {
+    "match_status": "second_half",
+    "elapsed_minutes": 22,
+    "home_goals": 0,
+    "away_goals": 0,
+    "ht_score": null,
+    "period": "first_half"
+  },
+  "stats": {
+    "ball_possession": {
+      "all": {
+        "home": 48,
+        "away": 52
+      }
+    },
+    "total_shots": {
+      "all": {
+        "home": 7,
+        "away": 9
+      }
+    },
+    "corner_kicks": {
+      "all": {
+        "home": 4,
+        "away": 5
+      }
+    }
+  }
+}
+```
+
+### MatchPlayerStats
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `player_id` | string | No | e.g. `pl_29627593` |
+| `player_name` | string | No | e.g. `Mohamed Salah` |
+| `team_id` | string | No | e.g. `tm_0406` |
+| `position` | string — enum: ``, `G`, `D`, `M`, `F` | No | Normalized field position (`G`/`D`/`M`/`F`, or `""` when unknown).. Values: ``, `G`, `D`, `M`, `F` |
+| `rating` | number \| null | No | e.g. `8.2` |
+| `minutes_played` | integer | No | e.g. `90` |
+| `started` | boolean | No | Whether the player started the match |
+| `played` | boolean | No | Whether the player played any minutes |
+| `passing` | object { total_passes, accurate_passes, key_passes, assists, total_crosses, accurate_crosses, total_long_balls, accurate_long_balls } | No |  |
+| `shooting` | object { goals, total_shots, shots_on_target, shots_off_target, blocked_shots, big_chances_created, expected_goals, expected_assists, np_expected_goals } | No |  |
+| `duels` | object { duel_won, duel_lost, aerial_won, challenge_lost, won_contest, dispossessed } | No |  |
+| `defending` | object { tackles, interceptions, clearances } | No |  |
+| `goalkeeping` | object { saves } | No |  |
+| `general` | object { touches, fouls, was_fouled, offsides, yellow_cards, red_cards, possession_lost, player_subbed_on, player_subbed_off } | No |  |
+
+**Example:**
+
+```json
+{
+  "player_id": "pl_29627593",
+  "player_name": "Mohamed Salah",
+  "team_id": "tm_0406",
+  "position": "F",
+  "rating": 8.2,
+  "minutes_played": 90,
+  "started": true,
+  "played": true,
+  "passing": {
+    "total_passes": <integer>,
+    "accurate_passes": <integer>,
+    "key_passes": <integer>,
+    "assists": <integer>,
+    "total_crosses": <integer>,
+    "accurate_crosses": <integer>,
+    "total_long_balls": <integer>,
+    "accurate_long_balls": <integer>
+  },
+  "shooting": {
+    "goals": <integer>,
+    "total_shots": <integer>,
+    "shots_on_target": <integer>,
+    "shots_off_target": <integer>,
+    "blocked_shots": <integer>,
+    "big_chances_created": <integer>,
+    "expected_goals": <number | null>,
+    "expected_assists": <number | null>,
+    "np_expected_goals": <number | null>
+  },
+  "duels": {
+    "duel_won": <integer>,
+    "duel_lost": <integer>,
+    "aerial_won": <integer>,
+    "challenge_lost": <integer>,
+    "won_contest": <integer>,
+    "dispossessed": <integer>
+  },
+  "defending": {
+    "tackles": <integer>,
+    "interceptions": <integer>,
+    "clearances": <integer>
+  },
+  "goalkeeping": {
+    "saves": <integer>
+  },
+  "general": {
+    "touches": <integer>,
+    "fouls": <integer>,
+    "was_fouled": <integer>,
+    "offsides": <integer>,
+    "yellow_cards": <integer>,
+    "red_cards": <integer>,
+    "possession_lost": <integer>,
+    "player_subbed_on": "pl_57344297",
+    "player_subbed_off": "pl_29627593"
+  }
+}
+```
+
+### LineupPlayer
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `pl_29627593` |
+| `name` | string | Yes | e.g. `Mohamed Salah` |
+| `position` | string \| null | No | For pre-match (confirmed XI) responses: full FIFA-style position (GK, RB, CB, LB, LWB, RWB, CDM, CM, CAM, LW, RW, CF, ST, …). For played matches: lean `G`/`D`/`M`/`F` vocabulary — only those buckets are stored per-event. |
+| `jersey_number` | integer \| null | No | e.g. `1` |
+
+**Example:**
+
+```json
+{
+  "id": "pl_29627593",
+  "name": "Mohamed Salah",
+  "position": "G",
+  "jersey_number": 1
+}
+```
+
+### LineupTeam
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `tm_0406` |
+| `name` | string | Yes | e.g. `Liverpool` |
+| `formation` | string \| null | No | Formation string sourced from the team sheet (e.g. "4-3-3", "4-2-3-1"). Null when unavailable. |
+| `starting_xi` | [LineupPlayer](#lineupplayer)[] | Yes | Players in the starting XI. Sorted by position priority (G→D→M→F) then jersey. |
+| `substitutes` | [LineupPlayer](#lineupplayer)[] | Yes | Bench players — both those who came on as subs and named-but-unused subs. |
+
+**Example:**
+
+```json
+{
+  "id": "tm_0406",
+  "name": "Liverpool",
+  "formation": "4-3-3",
+  "starting_xi": [
+    {
+      "id": "pl_29627593",
+      "name": "Mohamed Salah",
+      "position": "G",
+      "jersey_number": 1
+    }
+  ],
+  "substitutes": [
+    {
+      "id": "pl_29627593",
+      "name": "Mohamed Salah",
+      "position": "G",
+      "jersey_number": 1
+    }
+  ]
+}
+```
+
+### Lineups
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | Yes | e.g. `mt_838955483` |
+| `confirmed` | boolean | Yes | True when the lineup is the official team sheet (pre-match confirmed XI, or any played match). |
+| `home` | [LineupTeam](#lineupteam) | Yes |  |
+| `away` | [LineupTeam](#lineupteam) | Yes |  |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "confirmed": <boolean>,
+  "home": {
+    "id": "tm_0406",
+    "name": "Liverpool",
+    "formation": "4-3-3",
+    "starting_xi": [
+      {
+        "id": "pl_29627593",
+        "name": "Mohamed Salah",
+        "position": "G",
+        "jersey_number": 1
+      }
+    ],
+    "substitutes": [
+      {
+        "id": "pl_29627593",
+        "name": "Mohamed Salah",
+        "position": "G",
+        "jersey_number": 1
+      }
+    ]
+  },
+  "away": {
+    "id": "tm_0406",
+    "name": "Liverpool",
+    "formation": "4-3-3",
+    "starting_xi": [
+      {
+        "id": "pl_29627593",
+        "name": "Mohamed Salah",
+        "position": "G",
+        "jersey_number": 1
+      }
+    ],
+    "substitutes": [
+      {
+        "id": "pl_29627593",
+        "name": "Mohamed Salah",
+        "position": "G",
+        "jersey_number": 1
+      }
+    ]
+  }
+}
+```
+
+### HeatmapPoint
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `x` | integer | Yes | e.g. `41` |
+| `y` | integer | Yes | e.g. `9` |
+
+**Example:**
+
+```json
+{
+  "x": 41,
+  "y": 9
+}
+```
+
+### HeatmapTeam
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `tm_5025` |
+| `name` | string | Yes | e.g. `Juventus` |
+| `side` | string — enum: `home`, `away` | Yes | Values: `home`, `away` |
+
+**Example:**
+
+```json
+{
+  "id": "tm_5025",
+  "name": "Juventus",
+  "side": "home"
+}
+```
+
+### MatchPlayerHeatmap
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | Yes | e.g. `mt_404012971` |
+| `player` | object { id, name } | Yes |  |
+| `team` | [HeatmapTeam](#heatmapteam) | Yes |  |
+| `points` | [HeatmapPoint](#heatmappoint)[] | Yes | Points in capture order. `x` and `y` are integer pitch percentages (0–100). |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_404012971",
+  "player": {
+    "id": "pl_84027040",
+    "name": "Dušan Vlahović"
+  },
+  "team": {
+    "id": "tm_5025",
+    "name": "Juventus",
+    "side": "home"
+  },
+  "points": [
+    {
+      "x": 41,
+      "y": 9
+    }
+  ]
+}
+```
+
+### SeasonHeatmapPoint
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `x` | integer | Yes | e.g. `41` |
+| `y` | integer | Yes | e.g. `73` |
+| `count` | integer | Yes | Number of touches at this grid cell aggregated across the season. |
+
+**Example:**
+
+```json
+{
+  "x": 41,
+  "y": 73,
+  "count": 3
+}
+```
+
+### SeasonHeatmapCompetition
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `comp_6107` |
+| `name` | string | Yes | e.g. `FIFA World Cup` |
+
+**Example:**
+
+```json
+{
+  "id": "comp_6107",
+  "name": "FIFA World Cup"
+}
+```
+
+### SeasonHeatmapSeason
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `sn_326766` |
+| `name` | string | Yes | e.g. `2022` |
+
+**Example:**
+
+```json
+{
+  "id": "sn_326766",
+  "name": "2022"
+}
+```
+
+### PlayerSeasonHeatmap
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `player` | object { id, name } | Yes |  |
+| `competition` | [SeasonHeatmapCompetition](#seasonheatmapcompetition) | Yes |  |
+| `season` | [SeasonHeatmapSeason](#seasonheatmapseason) | Yes |  |
+| `points` | [SeasonHeatmapPoint](#seasonheatmappoint)[] | Yes | Aggregated points. `x` / `y` are pitch percentages (0–100); `count` is touches per cell. |
+
+**Example:**
+
+```json
+{
+  "player": {
+    "id": "pl_84027040",
+    "name": "Dušan Vlahović"
+  },
+  "competition": {
+    "id": "comp_6107",
+    "name": "FIFA World Cup"
+  },
+  "season": {
+    "id": "sn_326766",
+    "name": "2022"
+  },
+  "points": [
+    {
+      "x": 41,
+      "y": 73,
+      "count": 3
+    }
+  ]
+}
+```
+
+### ShotCoordinates
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `x` | number | No |  |
+| `y` | number | No |  |
+| `z` | number | No |  |
+
+**Example:**
+
+```json
+{
+  "x": <number>,
+  "y": <number>,
+  "z": <number>
+}
+```
+
+### ShotGoalkeeper
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `pl_29627593` |
+| `name` | string | No | e.g. `Manuel Neuer` |
+
+**Example:**
+
+```json
+{
+  "id": "pl_29627593",
+  "name": "Manuel Neuer"
+}
+```
+
+### Shot
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `sh_4812` |
+| `player_id` | string | No | e.g. `pl_29627593` |
+| `player_name` | string | No | e.g. `Mohamed Salah` |
+| `team_id` | string | No | e.g. `tm_0406` |
+| `team_name` | string | No | e.g. `Liverpool` |
+| `x` | number | No | Normalized X coordinate (0–100 scale) |
+| `y` | number | No | Normalized Y coordinate (0–100 scale) |
+| `minute` | integer | No | e.g. `24` |
+| `result` | string | No | Normalized result label (goal, saved, miss, block, post, …) |
+| `expected_goals` | number \| null | No | Per-shot expected goals (xG) |
+| `situation` | string \| null | No | e.g. `regular` |
+| `body_part` | string \| null | No | e.g. `right_foot` |
+| `goal_type` | string \| null | No | Present only for goals (e.g. regular, own) |
+| `goal_mouth_location` | string \| null | No | e.g. `high_left` |
+| `goal_mouth_coordinates` | [ShotCoordinates](#shotcoordinates) \| null | No |  |
+| `block_coordinates` | [ShotCoordinates](#shotcoordinates) \| null | No |  |
+| `is_blocked_shot` | boolean | No |  |
+| `blocked_by_player_id` | string \| null | No | e.g. `pl_08984824` |
+| `goalkeeper` | [ShotGoalkeeper](#shotgoalkeeper) \| null | No |  |
+| `is_goal` | boolean | No |  |
+| `is_on_target` | boolean | No |  |
+| `is_headed` | boolean | No |  |
+| `is_outside_box` | boolean | No |  |
+| `is_penalty` | boolean | No |  |
+
+**Example:**
+
+```json
+{
+  "id": "sh_4812",
+  "player_id": "pl_29627593",
+  "player_name": "Mohamed Salah",
+  "team_id": "tm_0406",
+  "team_name": "Liverpool",
+  "x": 62.1,
+  "y": 88.3,
+  "minute": 24,
+  "result": "goal",
+  "expected_goals": 0.47,
+  "situation": "regular",
+  "body_part": "right_foot",
+  "goal_type": "regular",
+  "goal_mouth_location": "high_left",
+  "goal_mouth_coordinates": {
+    "x": <number>,
+    "y": <number>,
+    "z": <number>
+  },
+  "block_coordinates": {
+    "x": <number>,
+    "y": <number>,
+    "z": <number>
+  },
+  "is_blocked_shot": <boolean>,
+  "blocked_by_player_id": "pl_08984824",
+  "goalkeeper": {
+    "id": "pl_29627593",
+    "name": "Manuel Neuer"
+  },
+  "is_goal": <boolean>,
+  "is_on_target": <boolean>,
+  "is_headed": <boolean>,
+  "is_outside_box": <boolean>,
+  "is_penalty": <boolean>
+}
+```
+
+### NpXgTeamSummary
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home_team` | number | No | e.g. `1.45` |
+| `away_team` | number | No | e.g. `0.82` |
+
+**Example:**
+
+```json
+{
+  "home_team": 1.45,
+  "away_team": 0.82
+}
+```
+
+### ShotmapResponse
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | No | e.g. `mt_838955483` |
+| `event` | object { id, home_team_id, away_team_id } | No |  |
+| `data` | [Shot](#shot)[] | No |  |
+| `np_xg_summary` | object { live, stored } | No |  |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "event": {
+    "id": "mt_838955483",
+    "home_team_id": "tm_0406",
+    "away_team_id": "tm_1002"
+  },
+  "data": [
+    {
+      "id": "sh_4812",
+      "player_id": "pl_29627593",
+      "player_name": "Mohamed Salah",
+      "team_id": "tm_0406",
+      "team_name": "Liverpool",
+      "x": 62.1,
+      "y": 88.3,
+      "minute": 24,
+      "result": "goal",
+      "expected_goals": 0.47,
+      "situation": "regular",
+      "body_part": "right_foot",
+      "goal_type": "regular",
+      "goal_mouth_location": "high_left",
+      "goal_mouth_coordinates": {
+        "x": <number>,
+        "y": <number>,
+        "z": <number>
+      },
+      "block_coordinates": {
+        "x": <number>,
+        "y": <number>,
+        "z": <number>
+      },
+      "is_blocked_shot": <boolean>,
+      "blocked_by_player_id": "pl_08984824",
+      "goalkeeper": {
+        "id": "pl_29627593",
+        "name": "Manuel Neuer"
+      },
+      "is_goal": <boolean>,
+      "is_on_target": <boolean>,
+      "is_headed": <boolean>,
+      "is_outside_box": <boolean>,
+      "is_penalty": <boolean>
+    }
+  ],
+  "np_xg_summary": {
+    "live": {
+      "home_team": 1.45,
+      "away_team": 0.82
+    },
+    "stored": {
+      "home_team": 1.45,
+      "away_team": 0.82
+    }
+  }
+}
+```
+
+### TimelineEntityRef
+
+Reference to a team or player inside a timeline event. `id` is null when only the name/slug are available (parsed-table rows sometimes lack the numeric id).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string \| null | No | e.g. `pl_4016958` |
+| `name` | string | No | e.g. `Alexander Isak` |
+| `slug` | string \| null | No | e.g. `player-name-pl_29627593` |
+
+**Example:**
+
+```json
+{
+  "id": "pl_4016958",
+  "name": "Alexander Isak",
+  "slug": "player-name-pl_29627593"
+}
+```
+
+### TimelineEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sequence` | integer | Yes | 1-based chronological index. Iterate the array as-is. |
+| `minute` | integer | Yes | Regulation minute of the period (≤45 for first_half, ≤90 for second_half, etc). Stoppage minutes live in `extra_time`. |
+| `extra_time` | integer | Yes | Stoppage minutes added on top of `minute`. `0` for in-period events. |
+| `period` | string — enum: `first_half`, `second_half`, `extra_time_first_half`, `extra_time_second_half`, `penalties` | Yes | Values: `first_half`, `second_half`, `extra_time_first_half`, `extra_time_second_half`, `penalties`. e.g. `first_half` |
+| `type` | string — enum: `goal`, `shot_on_target`, `shot_off_target`, `shot_blocked`, `shot_saved`, `yellow_card`, `red_card`, `yellow_red_card`, `foul`, `offside`, `corner_kick`, `substitution`, `penalty_awarded`, `penalty_scored`, `penalty_missed`, `penalty_saved`, `var`, `period_start`, `period_end`, `added_time` | Yes | Values: `goal`, `shot_on_target`, `shot_off_target`, `shot_blocked`, `shot_saved`, `yellow_card`, `red_card`, `yellow_red_card`, `foul`, `offside`, `corner_kick`, `substitution`, `penalty_awarded`, `penalty_scored`, `penalty_missed`, `penalty_saved`, `var`, `period_start`, `period_end`, `added_time`. e.g. `goal` |
+| `team` | [TimelineEntityRef](#timelineentityref) | Yes |  |
+| `player` | [TimelineEntityRef](#timelineentityref) | Yes |  |
+
+**Example:**
+
+```json
+{
+  "sequence": 8,
+  "minute": 45,
+  "extra_time": 3,
+  "period": "first_half",
+  "type": "goal",
+  "team": {
+    "id": "pl_4016958",
+    "name": "Alexander Isak",
+    "slug": "player-name-pl_29627593"
+  },
+  "player": {
+    "id": "pl_4016958",
+    "name": "Alexander Isak",
+    "slug": "player-name-pl_29627593"
+  }
+}
+```
+
+### MatchTimelineResponse
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `data` | object { match_id, coverage, events } | Yes |  |
+| `meta` | object { total, coverage, reason, last_updated } | Yes |  |
+
+**Example:**
+
+```json
+{
+  "data": {
+    "match_id": "mt_838955483",
+    "coverage": "full",
+    "events": [
+      {
+        "sequence": 8,
+        "minute": 45,
+        "extra_time": 3,
+        "period": "first_half",
+        "type": "goal",
+        "team": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        },
+        "player": {
+          "id": "pl_4016958",
+          "name": "Alexander Isak",
+          "slug": "player-name-pl_29627593"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "total": 312,
+    "coverage": "full",
+    "reason": "match_not_started",
+    "last_updated": "2026-05-22T14:00:00.000Z"
+  }
+}
+```
+
+### Player
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `pl_29627593` |
+| `name` | string | Yes | e.g. `Alexander Isak` |
+| `first_name` | string | Yes | e.g. `Alexander` |
+| `last_name` | string | Yes | e.g. `Isak` |
+| `position` | string — enum: ``, `G`, `D`, `M`, `F` | Yes | Normalized field position. One of `G` (goalkeeper), `D` (defender), `M` (midfielder), `F` (forward), or `""` when the source data is missing or unrecognized.. Values: ``, `G`, `D`, `M`, `F` |
+| `date_of_birth` | string (date) \| null | No | Null when date of birth is unknown or placeholder in source data |
+| `age` | integer \| null | No | Null when date of birth is unknown |
+| `nationality` | string | Yes | e.g. `Sweden` |
+| `height_cm` | integer \| null | Yes | Height in centimetres; `null` when unknown. |
+| `current_team` | object { id, name, jersey_number } | Yes |  |
+
+**Example:**
+
+```json
+{
+  "id": "pl_29627593",
+  "name": "Alexander Isak",
+  "first_name": "Alexander",
+  "last_name": "Isak",
+  "position": "M",
+  "date_of_birth": "1994-09-08T00:00:00.000Z",
+  "age": 29,
+  "nationality": "Sweden",
+  "height_cm": 179,
+  "current_team": {
+    "id": "tm_0406",
+    "name": "Liverpool",
+    "jersey_number": 18
+  }
+}
+```
+
+### SquadPlayer
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `pl_29627593` |
+| `name` | string | Yes | e.g. `Alexander Isak` |
+| `first_name` | string | Yes | e.g. `Alexander` |
+| `last_name` | string | Yes | e.g. `Isak` |
+| `position` | string — enum: ``, `G`, `D`, `M`, `F` | Yes | Normalized field position. One of `G` (goalkeeper), `D` (defender), `M` (midfielder), `F` (forward), or `""` when the source data is missing or unrecognized.. Values: ``, `G`, `D`, `M`, `F` |
+| `date_of_birth` | string (date) \| null | No | Null when date of birth is unknown or placeholder in source data |
+| `age` | integer \| null | No | Null when date of birth is unknown |
+| `nationality` | string | Yes | e.g. `Sweden` |
+| `height_cm` | integer \| null | Yes | Height in centimetres; `null` when unknown. |
+| `current_team` | object { id, name, jersey_number } | Yes |  |
+| `slug` | string \| null | Yes | e.g. `player-name-pl_29627593` |
+| `short_name` | string \| null | Yes | e.g. `A. Isak` |
+| `preferred_foot` | string \| null | Yes | e.g. `right` |
+| `gender` | string \| null | Yes |  |
+| `country_slug` | string \| null | Yes |  |
+| `market_value` | number \| null | Yes | Market value when available |
+| `contract_until` | string (date) \| null | Yes |  |
+| `national_team` | object { id, name } \| null | Yes |  |
+
+**Example:**
+
+```json
+{
+  "id": "pl_29627593",
+  "name": "Alexander Isak",
+  "first_name": "Alexander",
+  "last_name": "Isak",
+  "position": "M",
+  "date_of_birth": "1994-09-08T00:00:00.000Z",
+  "age": 29,
+  "nationality": "Sweden",
+  "height_cm": 179,
+  "current_team": {
+    "id": "tm_0406",
+    "name": "Liverpool",
+    "jersey_number": 18
+  },
+  "slug": "player-name-pl_29627593",
+  "short_name": "A. Isak",
+  "preferred_foot": "right",
+  "gender": <string | null>,
+  "country_slug": <string | null>,
+  "market_value": <number | null>,
+  "contract_until": <string (date) | null>,
+  "national_team": {
+    "id": "tm_86978",
+    "name": "Sweden"
+  }
+}
+```
+
+### PlayerInjury
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `player_id` | string | Yes | e.g. `pl_215956` |
+| `status` | string \| null | Yes | Injury severity (e.g. "out", "day_to_day"). |
+| `reason` | string \| null | Yes | Injury cause code. |
+| `start_date` | string (date-time) \| null | Yes | When the player became injured. |
+| `expected_return` | string (date-time) \| null | Yes | Estimated return date; null when open-ended/unknown. An estimate — injuries have no definite end date. |
+| `active` | boolean | Yes | e.g. `true` |
+
+**Example:**
+
+```json
+{
+  "player_id": "pl_215956",
+  "status": "out",
+  "reason": "muscle_injury",
+  "start_date": "2026-05-22T00:00:00.000Z",
+  "expected_return": "2026-07-20T00:00:00.000Z",
+  "active": true
+}
+```
+
+### PlayerSuspension
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `player_id` | string | Yes | e.g. `pl_215956` |
+| `reason` | string \| null | Yes | Suspension cause code. |
+| `matches` | integer \| null | Yes | Number of matches banned. |
+| `competition` | object { id, name } \| null | Yes | Competition the suspension applies to. |
+| `start_date` | string (date-time) \| null | Yes | e.g. `2026-06-01T00:00:00.000Z` |
+| `end_date` | string (date-time) \| null | Yes | e.g. `2026-07-24T00:00:00.000Z` |
+| `active` | boolean | Yes | e.g. `true` |
+
+**Example:**
+
+```json
+{
+  "player_id": "pl_215956",
+  "reason": "yellow_card_accumulation_suspension",
+  "matches": 1,
+  "competition": {
+    "id": "comp_242",
+    "name": "MLS"
+  },
+  "start_date": "2026-06-01T00:00:00.000Z",
+  "end_date": "2026-07-24T00:00:00.000Z",
+  "active": true
+}
+```
+
+### PlayerUnavailability
+
+Player injuries and suspensions grouped by kind.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `injuries` | [PlayerInjury](#playerinjury)[] | Yes |  |
+| `suspensions` | [PlayerSuspension](#playersuspension)[] | Yes |  |
+
+**Example:**
+
+```json
+{
+  "injuries": [
+    {
+      "player_id": "pl_215956",
+      "status": "out",
+      "reason": "muscle_injury",
+      "start_date": "2026-05-22T00:00:00.000Z",
+      "expected_return": "2026-07-20T00:00:00.000Z",
+      "active": true
+    }
+  ],
+  "suspensions": [
+    {
+      "player_id": "pl_215956",
+      "reason": "yellow_card_accumulation_suspension",
+      "matches": 1,
+      "competition": {
+        "id": "comp_242",
+        "name": "MLS"
+      },
+      "start_date": "2026-06-01T00:00:00.000Z",
+      "end_date": "2026-07-24T00:00:00.000Z",
+      "active": true
+    }
+  ]
+}
+```
+
+### PlayerStats
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `player_id` | string | No | e.g. `pl_29627593` |
+| `season_id` | string | No | e.g. `sn_6125938` |
+| `team_id` | string | No | e.g. `tm_0406` |
+| `position` | string — enum: ``, `G`, `D`, `M`, `F` | No | Normalized field position (`G`/`D`/`M`/`F`, or `""` when unknown).. Values: ``, `G`, `D`, `M`, `F` |
+| `rating` | number \| null | No | e.g. `7.24` |
+| `appearances` | integer | No | e.g. `37` |
+| `starts` | integer | No | e.g. `35` |
+| `minutes_played` | integer | No | e.g. `3120` |
+| `scoring` | object { goals, assists, goals_assists_sum, goal_conversion_percentage, penalties_taken, penalty_goals, big_chances_created, big_chances_missed } | No |  |
+| `shooting` | object { total_shots, shots_on_target, shots_off_target } | No |  |
+| `passing` | object { total_passes, accurate_passes, inaccurate_passes, pass_accuracy, key_passes, accurate_crosses, accurate_crosses_percentage, accurate_own_half_passes, accurate_opposition_half_passes, accurate_final_third_passes } | No |  |
+| `defending` | object { tackles, interceptions } | No |  |
+| `duels` | object { ground_duels_won, ground_duels_won_percentage, aerial_duels_won, aerial_duels_won_percentage, total_duels_won, total_duels_won_percentage, successful_dribbles, successful_dribbles_percentage } | No |  |
+| `discipline` | object { yellow_cards, red_cards, direct_red_cards, penalty_won, penalty_conceded } | No |  |
+
+**Example:**
+
+```json
+{
+  "player_id": "pl_29627593",
+  "season_id": "sn_6125938",
+  "team_id": "tm_0406",
+  "position": "M",
+  "rating": 7.24,
+  "appearances": 37,
+  "starts": 35,
+  "minutes_played": 3120,
+  "scoring": {
+    "goals": <integer>,
+    "assists": <integer>,
+    "goals_assists_sum": <integer>,
+    "goal_conversion_percentage": <number>,
+    "penalties_taken": <integer>,
+    "penalty_goals": <integer>,
+    "big_chances_created": <integer>,
+    "big_chances_missed": <integer>
+  },
+  "shooting": {
+    "total_shots": <integer>,
+    "shots_on_target": <integer>,
+    "shots_off_target": <integer>
+  },
+  "passing": {
+    "total_passes": <integer>,
+    "accurate_passes": <integer>,
+    "inaccurate_passes": <integer>,
+    "pass_accuracy": <number>,
+    "key_passes": <integer>,
+    "accurate_crosses": <integer>,
+    "accurate_crosses_percentage": <number>,
+    "accurate_own_half_passes": <integer>,
+    "accurate_opposition_half_passes": <integer>,
+    "accurate_final_third_passes": <integer>
+  },
+  "defending": {
+    "tackles": <integer>,
+    "interceptions": <integer>
+  },
+  "duels": {
+    "ground_duels_won": <integer>,
+    "ground_duels_won_percentage": <number | null>,
+    "aerial_duels_won": <integer>,
+    "aerial_duels_won_percentage": <number | null>,
+    "total_duels_won": <integer>,
+    "total_duels_won_percentage": <number | null>,
+    "successful_dribbles": <integer>,
+    "successful_dribbles_percentage": <number | null>
+  },
+  "discipline": {
+    "yellow_cards": <integer>,
+    "red_cards": <integer>,
+    "direct_red_cards": <integer>,
+    "penalty_won": <integer>,
+    "penalty_conceded": <integer>
+  }
+}
+```
+
+### OddsValue
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `opening` | string \| null | No | Decimal odds at market open. `null` when no opening price was recorded for this line (some bookmakers / late-listed markets only report the most recent quote). |
+| `last_seen` | string | No | e.g. `1.810` |
+
+**Example:**
+
+```json
+{
+  "opening": "1.750",
+  "last_seen": "1.810"
+}
+```
+
+### OverUnderOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `over` | [OddsValue](#oddsvalue) | No |  |
+| `under` | [OddsValue](#oddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "over": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "under": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  }
+}
+```
+
+### HomeDrawAwayOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home` | [OddsValue](#oddsvalue) | No |  |
+| `draw` | [OddsValue](#oddsvalue) | No |  |
+| `away` | [OddsValue](#oddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "home": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "draw": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "away": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  }
+}
+```
+
+### HomeAwayOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home` | [OddsValue](#oddsvalue) | No |  |
+| `away` | [OddsValue](#oddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "home": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "away": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  }
+}
+```
+
+### YesNoOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `yes` | [OddsValue](#oddsvalue) | No |  |
+| `no` | [OddsValue](#oddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "yes": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "no": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  }
+}
+```
+
+### DoubleChanceOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home_draw` | [OddsValue](#oddsvalue) | No |  |
+| `home_away` | [OddsValue](#oddsvalue) | No |  |
+| `draw_away` | [OddsValue](#oddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "home_draw": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "home_away": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  },
+  "draw_away": {
+    "opening": "1.750",
+    "last_seen": "1.810"
+  }
+}
+```
+
+### TeamOverUnderLines
+
+Per-team over/under prices keyed by line (e.g. "1.5").
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `home` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+| `away` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+
+**Example:**
+
+```json
+{
+  "home": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "away": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  }
+}
+```
+
+### MatchOddsMarkets
+
+Every market is optional — it appears only when the bookmaker prices
+it for that match (e.g. shots markets are limited to bigger fixtures,
+`to_qualify` to knockout ties).
+
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_odds` | [HomeDrawAwayOdds](#homedrawawayodds) | No |  |
+| `btts` | [YesNoOdds](#yesnoodds) | No |  |
+| `total_goals` | Map<string, [OverUnderOdds](#overunderodds)> | No | Over/under prices keyed by goals line. |
+| `match_corners` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+| `total_cards` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+| `asian_handicap` | object { home, away } | No |  |
+| `draw_no_bet` | [HomeAwayOdds](#homeawayodds) | No |  |
+| `double_chance` | [DoubleChanceOdds](#doublechanceodds) | No |  |
+| `first_half_result` | [HomeDrawAwayOdds](#homedrawawayodds) | No |  |
+| `first_team_to_score` | object { home, away, none } | No | Present when the bookmaker prices it for the match. |
+| `second_half_result` | [HomeDrawAwayOdds](#homedrawawayodds) | No |  |
+| `half_time_double_chance` | [DoubleChanceOdds](#doublechanceodds) | No |  |
+| `handicap_result` | Map<string, [HomeDrawAwayOdds](#homedrawawayodds)> | No | European (3-way) handicap keyed by the HOME team's handicap line (e.g. "-1", "+2"). |
+| `team_total_goals` | [TeamOverUnderLines](#teamoverunderlines) | No |  |
+| `btts_first_half` | [YesNoOdds](#yesnoodds) | No |  |
+| `btts_second_half` | [YesNoOdds](#yesnoodds) | No |  |
+| `total_goals_btts` | Map<string, object { over_yes, over_no, under_yes, under_no }> | No | Combined total goals + BTTS, keyed by goals line. |
+| `match_shots` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+| `match_shots_on_target` | Map<string, [OverUnderOdds](#overunderodds)> | No |  |
+| `team_shots` | [TeamOverUnderLines](#teamoverunderlines) | No |  |
+| `team_shots_on_target` | [TeamOverUnderLines](#teamoverunderlines) | No |  |
+| `team_corners` | [TeamOverUnderLines](#teamoverunderlines) | No |  |
+| `correct_score` | Map<string, [OddsValue](#oddsvalue)> | No | Scoreline ("home-away", e.g. "2-1") → odds. |
+| `to_qualify` | [HomeAwayOdds](#homeawayodds) | No |  |
+| `a_penalty_in_match` | [YesNoOdds](#yesnoodds) | No |  |
+| `to_score_a_penalty` | [HomeAwayOdds](#homeawayodds) | No |  |
+| `to_miss_a_penalty` | [HomeAwayOdds](#homeawayodds) | No |  |
+
+**Example:**
+
+```json
+{
+  "match_odds": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "draw": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "btts": {
+    "yes": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "no": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "total_goals": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "match_corners": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "total_cards": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "asian_handicap": {
+    "home": {
+      "-0.5": {
+        "opening": null,
+        "last_seen": "3.780"
+      },
+      "+0.0": {
+        "opening": null,
+        "last_seen": "2.720"
+      }
+    },
+    "away": {
+      "+0.5": {
+        "opening": null,
+        "last_seen": "1.290"
+      },
+      "+0.0": {
+        "opening": null,
+        "last_seen": "1.500"
+      }
+    }
+  },
+  "draw_no_bet": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "double_chance": {
+    "home_draw": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "home_away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "draw_away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "first_half_result": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "draw": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "first_team_to_score": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "none": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "second_half_result": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "draw": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "half_time_double_chance": {
+    "home_draw": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "home_away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "draw_away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "handicap_result": {
+    "<key>": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "team_total_goals": {
+    "home": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "away": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    }
+  },
+  "btts_first_half": {
+    "yes": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "no": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "btts_second_half": {
+    "yes": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "no": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "total_goals_btts": {
+    "<key>": {
+      "over_yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "over_no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under_yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under_no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "match_shots": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "match_shots_on_target": {
+    "<key>": {
+      "over": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "under": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  },
+  "team_shots": {
+    "home": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "away": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    }
+  },
+  "team_shots_on_target": {
+    "home": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "away": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    }
+  },
+  "team_corners": {
+    "home": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "away": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    }
+  },
+  "correct_score": {
+    "<key>": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "to_qualify": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "a_penalty_in_match": {
+    "yes": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "no": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "to_score_a_penalty": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  },
+  "to_miss_a_penalty": {
+    "home": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    },
+    "away": {
+      "opening": "1.750",
+      "last_seen": "1.810"
+    }
+  }
+}
+```
+
+### BookmakerMatchOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bookmaker` | string | No | One of Bet365, Paddy Power, BetMGM UK, Pinnacle, Betfair Exchange. |
+| `markets` | [MatchOddsMarkets](#matchoddsmarkets) | No |  |
+
+**Example:**
+
+```json
+{
+  "bookmaker": "Bet365",
+  "markets": {
+    "match_odds": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "btts": {
+      "yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "total_goals": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "match_corners": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "total_cards": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "asian_handicap": {
+      "home": {
+        "-0.5": {
+          "opening": null,
+          "last_seen": "3.780"
+        },
+        "+0.0": {
+          "opening": null,
+          "last_seen": "2.720"
+        }
+      },
+      "away": {
+        "+0.5": {
+          "opening": null,
+          "last_seen": "1.290"
+        },
+        "+0.0": {
+          "opening": null,
+          "last_seen": "1.500"
+        }
+      }
+    },
+    "draw_no_bet": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "double_chance": {
+      "home_draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "home_away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw_away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "first_half_result": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "first_team_to_score": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "none": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "second_half_result": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "half_time_double_chance": {
+      "home_draw": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "home_away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "draw_away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "handicap_result": {
+      "<key>": {
+        "home": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "draw": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "away": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "team_total_goals": {
+      "home": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      },
+      "away": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      }
+    },
+    "btts_first_half": {
+      "yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "btts_second_half": {
+      "yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "total_goals_btts": {
+      "<key>": {
+        "over_yes": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "over_no": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under_yes": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under_no": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "match_shots": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "match_shots_on_target": {
+      "<key>": {
+        "over": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        },
+        "under": {
+          "opening": "1.750",
+          "last_seen": "1.810"
+        }
+      }
+    },
+    "team_shots": {
+      "home": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      },
+      "away": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      }
+    },
+    "team_shots_on_target": {
+      "home": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      },
+      "away": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      }
+    },
+    "team_corners": {
+      "home": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      },
+      "away": {
+        "<key>": {
+          "over": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "under": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      }
+    },
+    "correct_score": {
+      "<key>": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "to_qualify": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "a_penalty_in_match": {
+      "yes": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "no": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "to_score_a_penalty": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    },
+    "to_miss_a_penalty": {
+      "home": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      },
+      "away": {
+        "opening": "1.750",
+        "last_seen": "1.810"
+      }
+    }
+  }
+}
+```
+
+### MatchOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | No | e.g. `mt_838955483` |
+| `bookmakers` | [BookmakerMatchOdds](#bookmakermatchodds)[] | No |  |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "bookmakers": [
+    {
+      "bookmaker": "Bet365",
+      "markets": {
+        "match_odds": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "draw": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "btts": {
+          "yes": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "no": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "total_goals": {
+          "<key>": {
+            "over": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "match_corners": {
+          "<key>": {
+            "over": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "total_cards": {
+          "<key>": {
+            "over": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "asian_handicap": {
+          "home": {
+            "-0.5": {
+              "opening": null,
+              "last_seen": "3.780"
+            },
+            "+0.0": {
+              "opening": null,
+              "last_seen": "2.720"
+            }
+          },
+          "away": {
+            "+0.5": {
+              "opening": null,
+              "last_seen": "1.290"
+            },
+            "+0.0": {
+              "opening": null,
+              "last_seen": "1.500"
+            }
+          }
+        },
+        "draw_no_bet": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "double_chance": {
+          "home_draw": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "home_away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "draw_away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "first_half_result": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "draw": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "first_team_to_score": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "none": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "second_half_result": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "draw": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "half_time_double_chance": {
+          "home_draw": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "home_away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "draw_away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "handicap_result": {
+          "<key>": {
+            "home": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "draw": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "away": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "team_total_goals": {
+          "home": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "away": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          }
+        },
+        "btts_first_half": {
+          "yes": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "no": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "btts_second_half": {
+          "yes": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "no": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "total_goals_btts": {
+          "<key>": {
+            "over_yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "over_no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under_yes": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under_no": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "match_shots": {
+          "<key>": {
+            "over": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "match_shots_on_target": {
+          "<key>": {
+            "over": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            },
+            "under": {
+              "opening": "1.750",
+              "last_seen": "1.810"
+            }
+          }
+        },
+        "team_shots": {
+          "home": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "away": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          }
+        },
+        "team_shots_on_target": {
+          "home": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "away": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          }
+        },
+        "team_corners": {
+          "home": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          },
+          "away": {
+            "<key>": {
+              "over": { ... },
+              "under": { ... }
+            }
+          }
+        },
+        "correct_score": {
+          "<key>": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "to_qualify": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "a_penalty_in_match": {
+          "yes": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "no": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "to_score_a_penalty": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        },
+        "to_miss_a_penalty": {
+          "home": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          },
+          "away": {
+            "opening": "1.750",
+            "last_seen": "1.810"
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+### LiveOddsValue
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `live` | string | No | e.g. `1.810` |
+
+**Example:**
+
+```json
+{
+  "live": "1.810"
+}
+```
+
+### LiveOverUnderOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `over` | [LiveOddsValue](#liveoddsvalue) | No |  |
+| `under` | [LiveOddsValue](#liveoddsvalue) | No |  |
+
+**Example:**
+
+```json
+{
+  "over": {
+    "live": "1.810"
+  },
+  "under": {
+    "live": "1.810"
+  }
+}
+```
+
+### LiveMatchOddsMarkets
+
+Curated set of high-traffic in-play markets (match odds, total goals, Asian handicap).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_odds` | object { home, draw, away } | No |  |
+| `total_goals` | Map<string, [LiveOverUnderOdds](#liveoverunderodds)> | No |  |
+| `asian_handicap` | object { home, away } | No |  |
+
+**Example:**
+
+```json
+{
+  "match_odds": {
+    "home": {
+      "live": "1.810"
+    },
+    "draw": {
+      "live": "1.810"
+    },
+    "away": {
+      "live": "1.810"
+    }
+  },
+  "total_goals": {
+    "<key>": {
+      "over": {
+        "live": "1.810"
+      },
+      "under": {
+        "live": "1.810"
+      }
+    }
+  },
+  "asian_handicap": {
+    "home": {
+      "-0.5": {
+        "live": "2.670"
+      },
+      "+0.0": {
+        "live": "1.750"
+      }
+    },
+    "away": {
+      "+0.5": {
+        "live": "1.450"
+      },
+      "+0.0": {
+        "live": "2.050"
+      }
+    }
+  }
+}
+```
+
+### LiveBookmakerMatchOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bookmaker` | string | No | e.g. `Bet365` |
+| `markets` | [LiveMatchOddsMarkets](#livematchoddsmarkets) | No |  |
+
+**Example:**
+
+```json
+{
+  "bookmaker": "Bet365",
+  "markets": {
+    "match_odds": {
+      "home": {
+        "live": "1.810"
+      },
+      "draw": {
+        "live": "1.810"
+      },
+      "away": {
+        "live": "1.810"
+      }
+    },
+    "total_goals": {
+      "<key>": {
+        "over": {
+          "live": "1.810"
+        },
+        "under": {
+          "live": "1.810"
+        }
+      }
+    },
+    "asian_handicap": {
+      "home": {
+        "-0.5": {
+          "live": "2.670"
+        },
+        "+0.0": {
+          "live": "1.750"
+        }
+      },
+      "away": {
+        "+0.5": {
+          "live": "1.450"
+        },
+        "+0.0": {
+          "live": "2.050"
+        }
+      }
+    }
+  }
+}
+```
+
+### LiveMatchOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | No | e.g. `mt_838955483` |
+| `bookmakers` | [LiveBookmakerMatchOdds](#livebookmakermatchodds)[] | No |  |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_838955483",
+  "bookmakers": [
+    {
+      "bookmaker": "Bet365",
+      "markets": {
+        "match_odds": {
+          "home": {
+            "live": "1.810"
+          },
+          "draw": {
+            "live": "1.810"
+          },
+          "away": {
+            "live": "1.810"
+          }
+        },
+        "total_goals": {
+          "<key>": {
+            "over": {
+              "live": "1.810"
+            },
+            "under": {
+              "live": "1.810"
+            }
+          }
+        },
+        "asian_handicap": {
+          "home": {
+            "-0.5": {
+              "live": "2.670"
+            },
+            "+0.0": {
+              "live": "1.750"
+            }
+          },
+          "away": {
+            "+0.5": {
+              "live": "1.450"
+            },
+            "+0.0": {
+              "live": "2.050"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+### MatchPlayerOddsEntry
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string \| null | No | Player ID. Null when the player cannot be uniquely identified. |
+| `name` | string | Yes | e.g. `Mohamed Salah` |
+| `line` | number \| null | Yes | Over/Under line for ladder markets (`player_shots`, `player_shots_on_target`, `player_assists`: typically `0.5`, `1.5`, …) and the implicit line for flat markets (`anytime_goalscorer`: always `0.5`). `null` for markets with no line concept (`first_goalscorer`). |
+| `market_type` | string — enum: `Over`, `Under` \| null | Yes | Direction of the quote. `null` for markets with no direction concept (`first_goalscorer`). Bet365 prices Over almost exclusively today on player props — Under entries surface once a book that quotes them is added.. Values: `Over`, `Under` |
+| `odd` | number | Yes | Latest decimal odds quoted by the bookmaker. |
+
+**Example:**
+
+```json
+{
+  "id": "pl_29627593",
+  "name": "Mohamed Salah",
+  "line": 1.5,
+  "market_type": "Over",
+  "odd": 1.85
+}
+```
+
+### MatchPlayerOddsMarket
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string — enum: `anytime_goalscorer`, `first_goalscorer`, `player_shots`, `player_shots_on_target`, `player_assists` | Yes | Player-prop market key (matches the values accepted by `?markets=`).. Values: `anytime_goalscorer`, `first_goalscorer`, `player_shots`, `player_shots_on_target`, `player_assists` |
+| `players` | [MatchPlayerOddsEntry](#matchplayeroddsentry)[] | Yes | Entries for this market. Sorted by `(line asc nulls last, market_type asc nulls last, odd asc, name asc)`. Ladder markets emit one entry per `(player × line × market_type)`. |
+
+**Example:**
+
+```json
+{
+  "name": "anytime_goalscorer",
+  "players": [
+    {
+      "id": "pl_29627593",
+      "name": "Mohamed Salah",
+      "line": 1.5,
+      "market_type": "Over",
+      "odd": 1.85
+    }
+  ]
+}
+```
+
+### MatchPlayerOddsTeam
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | e.g. `tm_7355123` |
+| `name` | string | Yes | e.g. `Comerciantes Unidos` |
+
+**Example:**
+
+```json
+{
+  "id": "tm_7355123",
+  "name": "Comerciantes Unidos"
+}
+```
+
+### MatchPlayerOdds
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `match_id` | string | Yes | e.g. `mt_404012971` |
+| `home_team` | [MatchPlayerOddsTeam](#matchplayeroddsteam) | Yes |  |
+| `away_team` | [MatchPlayerOddsTeam](#matchplayeroddsteam) | Yes |  |
+| `kickoff_at` | string (date-time) \| null | No | ISO-8601 kickoff timestamp; null when not recorded. |
+| `bookmaker` | string — enum: `bet365` | Yes | Values: `bet365`. e.g. `bet365` |
+| `markets` | [MatchPlayerOddsMarket](#matchplayeroddsmarket)[] | Yes | One entry per requested market. Order matches the order in `?markets=` (or registry order when omitted). |
+
+**Example:**
+
+```json
+{
+  "match_id": "mt_404012971",
+  "home_team": {
+    "id": "tm_7355123",
+    "name": "Comerciantes Unidos"
+  },
+  "away_team": {
+    "id": "tm_7355123",
+    "name": "Comerciantes Unidos"
+  },
+  "kickoff_at": "2026-05-25T20:30:00.000Z",
+  "bookmaker": "bet365",
+  "markets": [
+    {
+      "name": "anytime_goalscorer",
+      "players": [
+        {
+          "id": "pl_29627593",
+          "name": "Mohamed Salah",
+          "line": 1.5,
+          "market_type": "Over",
+          "odd": 1.85
+        }
+      ]
+    }
+  ]
+}
+```
+
+### CoverageSeasonStatus
+
+Derived from stored events only — not_loaded (no events), in_progress (upcoming or recently started events remain), complete (all remaining stored events are finished or abandoned). Extensible; a `partial` value may be added once expected-event totals are tracked.
+
+Enum: `complete`, `in_progress`, `not_loaded`
+
+### CoverageDataTypeEntry
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `available` | boolean | Yes |  |
+| `covered_events` | integer | No | Finished events having this data type (drilldown only) |
+| `coverage_pct` | number | No | covered_events / finished events × 100, one decimal (drilldown only) |
+
+**Example:**
+
+```json
+{
+  "available": <boolean>,
+  "covered_events": 218,
+  "coverage_pct": 99.1
+}
+```
+
+### CoverageDataTypes
+
+Keyed by data type name; extensible — clients must tolerate new keys.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fixtures` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `team_stats` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `xg` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `odds` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `lineups` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `player_stats` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `standings` | [CoverageDataTypeEntry](#coveragedatatypeentry) | No |  |
+| `<key>` | [CoverageDataTypeEntry](#coveragedatatypeentry) | — | Dynamic key (additionalProperties) |
+
+**Example:**
+
+```json
+{
+  "fixtures": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "team_stats": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "xg": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "odds": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "lineups": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "player_stats": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "standings": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  },
+  "<key>": {
+    "available": <boolean>,
+    "covered_events": 218,
+    "coverage_pct": 99.1
+  }
+}
+```
+
+### CoverageSeasonRef
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `sn_2210` |
+| `year` | string \| null | No | e.g. `25/26` |
+
+**Example:**
+
+```json
+{
+  "id": "sn_2210",
+  "year": "25/26"
+}
+```
+
+### CoverageLeague
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `comp_3039` |
+| `name` | string | No | e.g. `Premier League` |
+| `country` | string \| null | No | e.g. `England` |
+| `country_code` | string \| null | No | e.g. `GB` |
+| `seasons` | object { count, first, last } | No | Seasons with data loaded (first/last picked by season id) |
+| `data_types` | [CoverageDataTypes](#coveragedatatypes) | No |  |
+| `latest_season` | object { id, year, status, finished_events, total_events } \| null | No |  |
+| `total_finished_events` | integer | No | e.g. `4560` |
+
+**Example:**
+
+```json
+{
+  "id": "comp_3039",
+  "name": "Premier League",
+  "country": "England",
+  "country_code": "GB",
+  "seasons": {
+    "count": 12,
+    "first": {
+      "id": "sn_2210",
+      "year": "25/26"
+    },
+    "last": {
+      "id": "sn_2210",
+      "year": "25/26"
+    }
+  },
+  "data_types": {
+    "fixtures": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "team_stats": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "xg": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "odds": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "lineups": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "player_stats": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "standings": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "<key>": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    }
+  },
+  "latest_season": {
+    "id": "sn_2210",
+    "year": "25/26",
+    "status": <string>,
+    "finished_events": 220,
+    "total_events": 380
+  },
+  "total_finished_events": 4560
+}
+```
+
+### CoverageSeason
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `sn_2210` |
+| `name` | string | No | e.g. `Premier League 25/26` |
+| `year` | string \| null | No | e.g. `25/26` |
+| `status` | [CoverageSeasonStatus](#coverageseasonstatus) | No |  |
+| `events` | object { finished, total } | No |  |
+| `data_types` | [CoverageDataTypes](#coveragedatatypes) | No |  |
+
+**Example:**
+
+```json
+{
+  "id": "sn_2210",
+  "name": "Premier League 25/26",
+  "year": "25/26",
+  "status": <string>,
+  "events": {
+    "finished": 220,
+    "total": 380
+  },
+  "data_types": {
+    "fixtures": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "team_stats": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "xg": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "odds": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "lineups": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "player_stats": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "standings": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    },
+    "<key>": {
+      "available": <boolean>,
+      "covered_events": 218,
+      "coverage_pct": 99.1
+    }
+  }
+}
+```
+
+### CoverageLeagueDetail
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | No | e.g. `comp_3039` |
+| `name` | string | No | e.g. `Premier League` |
+| `country` | string \| null | No | e.g. `England` |
+| `country_code` | string \| null | No | e.g. `GB` |
+| `total_seasons` | integer | No | Every season known for the league, including not-loaded catalog rows |
+| `loaded_seasons` | integer | No | Seasons with at least one event — matches the list's seasons.count |
+| `total_finished_events` | integer | No | e.g. `4560` |
+| `seasons` | [CoverageSeason](#coverageseason)[] | No |  |
+
+**Example:**
+
+```json
+{
+  "id": "comp_3039",
+  "name": "Premier League",
+  "country": "England",
+  "country_code": "GB",
+  "total_seasons": 33,
+  "loaded_seasons": 12,
+  "total_finished_events": 4560,
+  "seasons": [
+    {
+      "id": "sn_2210",
+      "name": "Premier League 25/26",
+      "year": "25/26",
+      "status": <string>,
+      "events": {
+        "finished": 220,
+        "total": 380
+      },
+      "data_types": {
+        "fixtures": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "team_stats": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "xg": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "odds": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "lineups": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "player_stats": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "standings": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        },
+        "<key>": {
+          "available": <boolean>,
+          "covered_events": 218,
+          "coverage_pct": 99.1
+        }
+      }
+    }
+  ]
+}
+```
+
+### CoverageSummary
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `leagues` | integer | No | e.g. `214` |
+| `seasons` | integer | No | e.g. `726` |
+| `finished_events` | integer | No | e.g. `312450` |
+| `seasons_by_status` | object { complete, in_progress, not_loaded } | No |  |
+| `pct_complete` | number | No | complete seasons / total seasons × 100, one decimal |
+
+**Example:**
+
+```json
+{
+  "leagues": 214,
+  "seasons": 726,
+  "finished_events": 312450,
+  "seasons_by_status": {
+    "complete": 480,
+    "in_progress": 49,
+    "not_loaded": 197
+  },
+  "pct_complete": 66.1
+}
+```
+
+### PaginationMeta
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `page` | integer | No | e.g. `1` |
+| `per_page` | integer | No | e.g. `20` |
+| `total` | integer | No | e.g. `100` |
+| `total_pages` | integer | No | e.g. `5` |
+
+**Example:**
+
+```json
+{
+  "page": 1,
+  "per_page": 20,
+  "total": 100,
+  "total_pages": 5
+}
+```
+
+### Error
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `error` | object { code, message, status_code } | No |  |
+
+**Example:**
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Invalid parameter",
+    "status_code": 400
+  }
+}
+```
+
+---
+
+## Error Responses
+
+All errors follow this format:
+
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string",
+    "status_code": 400
+  }
+}
+```
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `invalid_request` | Bad request / missing required parameter |
+| 401 | `unauthorized` | Missing or invalid API key |
+| 404 | `not_found` | Resource not found |
