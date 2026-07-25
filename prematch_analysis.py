@@ -48,20 +48,6 @@ BOOKMAKER_PREFERENCE = ["Pinnacle", "Bet365", "Betfair Exchange", "BetMGM UK", "
 # ---------------------------------------------------------------------- #
 # Team / match resolution
 # ---------------------------------------------------------------------- #
-def resolve_team(client: StatsAPIClient, name: str) -> dict | None:
-    results = client.search_teams(name)
-    if not results:
-        return None
-    for t in results:
-        if t.get("name", "").lower() == name.lower():
-            return t
-    return results[0]
-
-
-def _parse_date(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-
-
 def _normalize_name(name: str) -> str:
     """Lowercase and strip accents, e.g. 'FC Juárez' -> 'fc juarez'.
 
@@ -73,6 +59,33 @@ def _normalize_name(name: str) -> str:
     """
     decomposed = unicodedata.normalize("NFKD", name)
     return "".join(c for c in decomposed if not unicodedata.combining(c)).lower().strip()
+
+
+def resolve_team_candidates(client: StatsAPIClient, name: str, limit: int = 5) -> list[dict]:
+    """Search results for `name`, exact (accent-insensitive) matches first.
+
+    Team search can return several same-named or oddly-ranked entries (a
+    reserve squad, a same-named club in another country, a duplicate row) and
+    there's no reliable way to tell which one is "the" team from the name
+    alone. Callers should try these in order against find_match rather than
+    trusting the first result.
+    """
+    results = client.search_teams(name)
+    if not results:
+        return []
+    target = _normalize_name(name)
+    exact = [t for t in results if _normalize_name(t.get("name", "")) == target]
+    rest = [t for t in results if t not in exact]
+    return (exact + rest)[:limit]
+
+
+def resolve_team(client: StatsAPIClient, name: str) -> dict | None:
+    candidates = resolve_team_candidates(client, name, limit=1)
+    return candidates[0] if candidates else None
+
+
+def _parse_date(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
 def find_match(
@@ -428,13 +441,26 @@ def build_payload(
     else:
         if not home or not away:
             raise ValueError("Debes indicar equipo local y visitante, o un match_id.")
-        home_team = resolve_team(client, home)
-        away_team = resolve_team(client, away)
-        if not home_team:
+        home_candidates = resolve_team_candidates(client, home)
+        away_candidates = resolve_team_candidates(client, away)
+        if not home_candidates:
             raise ValueError(f"No se encontro el equipo: {home}")
-        if not away_team:
+        if not away_candidates:
             raise ValueError(f"No se encontro el equipo: {away}")
-        match = find_match(client, home_team["id"], away_team["id"], date, home_name=home, away_name=away)
+
+        # Team search can rank the wrong same-named club first (reserve
+        # squad, different country, duplicate row), so try candidates in
+        # order and only trust a pairing once it resolves to a real fixture.
+        match = None
+        home_team, away_team = home_candidates[0], away_candidates[0]
+        for hc in home_candidates:
+            for ac in away_candidates:
+                match = find_match(client, hc["id"], ac["id"], date, home_name=home, away_name=away)
+                if match:
+                    home_team, away_team = hc, ac
+                    break
+            if match:
+                break
         if not match:
             raise ValueError(f"No se encontro un partido entre {home} y {away} cerca de la fecha indicada.")
         detail = client.get_match(match["id"])
