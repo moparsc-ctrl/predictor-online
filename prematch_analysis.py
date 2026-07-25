@@ -16,6 +16,7 @@ import argparse
 import logging
 import statistics
 import sys
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -61,11 +62,26 @@ def _parse_date(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
+def _normalize_name(name: str) -> str:
+    """Lowercase and strip accents, e.g. 'FC Juárez' -> 'fc juarez'.
+
+    TheStatsAPI's team search is accent-sensitive and its data isn't
+    consistently accented across youth/reserve vs. senior team names, so a
+    plain-ASCII search for a team like Juarez can miss the real one. Match
+    detail payloads carry the correctly-accented name regardless, so we fall
+    back to comparing those directly instead of trusting search results.
+    """
+    decomposed = unicodedata.normalize("NFKD", name)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower().strip()
+
+
 def find_match(
     client: StatsAPIClient,
     home_id: str,
     away_id: str,
     approx_date: str | None,
+    home_name: str | None = None,
+    away_name: str | None = None,
     window_days: int = DEFAULT_SEARCH_WINDOW_DAYS,
 ) -> dict | None:
     now = datetime.now(timezone.utc)
@@ -78,20 +94,48 @@ def find_match(
         date_from = (now - timedelta(days=3)).date().isoformat()
         date_to = (now + timedelta(days=120)).date().isoformat()
 
-    matches = client.list_matches(team_id=home_id, date_from=date_from, date_to=date_to)
-    candidates = [m for m in matches if away_id in (m["home_team"]["id"], m["away_team"]["id"])]
-    if not candidates:
-        return None
+    def closest(candidates: list[dict]) -> dict | None:
+        if not candidates:
+            return None
 
-    def diff(m: dict) -> float:
-        try:
-            match_dt = datetime.strptime(m["utc_date"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-        except (ValueError, KeyError):
-            return float("inf")
-        return abs((match_dt - center).total_seconds())
+        def diff(m: dict) -> float:
+            try:
+                match_dt = datetime.strptime(m["utc_date"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            except (ValueError, KeyError):
+                return float("inf")
+            return abs((match_dt - center).total_seconds())
 
-    candidates.sort(key=diff)
-    return candidates[0]
+        return min(candidates, key=diff)
+
+    def fuzzy_filter(matches: list[dict], target_name: str) -> list[dict]:
+        target = _normalize_name(target_name)
+        return [
+            m
+            for m in matches
+            if target in _normalize_name(m["home_team"]["name"]) or target in _normalize_name(m["away_team"]["name"])
+        ]
+
+    home_matches = client.list_matches(team_id=home_id, date_from=date_from, date_to=date_to)
+    candidates = [m for m in home_matches if away_id in (m["home_team"]["id"], m["away_team"]["id"])]
+    match = closest(candidates)
+    if match:
+        return match
+
+    # ID-based lookup can miss real matches when team search resolved the
+    # wrong (e.g. accent-mismatched or duplicate) team id. Fall back to
+    # matching by name directly against the fixtures we already have.
+    if away_name:
+        match = closest(fuzzy_filter(home_matches, away_name))
+        if match:
+            return match
+
+    if home_name and away_id != home_id:
+        away_matches = client.list_matches(team_id=away_id, date_from=date_from, date_to=date_to)
+        match = closest(fuzzy_filter(away_matches, home_name))
+        if match:
+            return match
+
+    return None
 
 
 # ---------------------------------------------------------------------- #
@@ -390,7 +434,7 @@ def build_payload(
             raise ValueError(f"No se encontro el equipo: {home}")
         if not away_team:
             raise ValueError(f"No se encontro el equipo: {away}")
-        match = find_match(client, home_team["id"], away_team["id"], date)
+        match = find_match(client, home_team["id"], away_team["id"], date, home_name=home, away_name=away)
         if not match:
             raise ValueError(f"No se encontro un partido entre {home} y {away} cerca de la fecha indicada.")
         detail = client.get_match(match["id"])
