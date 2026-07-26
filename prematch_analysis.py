@@ -206,10 +206,13 @@ def stats_from_recent_matches(
     team_id: str,
     reference_date: str,
     n_recent: int,
+    exclude_match_id: str | None = None,
 ) -> dict[str, Any] | None:
     matches = client.list_matches(team_id=team_id, status="finished", date_to=reference_date, per_page=100)
     if not matches:
         return None
+    if exclude_match_id:
+        matches = [m for m in matches if m["id"] != exclude_match_id]
 
     def match_dt(m: dict) -> datetime:
         try:
@@ -271,12 +274,18 @@ def stats_from_recent_matches(
 # Recent match records (form/rating ficha)
 # ---------------------------------------------------------------------- #
 def get_recent_match_records(
-    client: StatsAPIClient, team_id: str, reference_date: str, n: int = 5
+    client: StatsAPIClient,
+    team_id: str,
+    reference_date: str,
+    n: int = 5,
+    exclude_match_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Last n finished matches for team_id: opponent, score and shot/corner/xG stats for both sides."""
     matches = client.list_matches(team_id=team_id, status="finished", date_to=reference_date, per_page=100)
     if not matches:
         return []
+    if exclude_match_id:
+        matches = [m for m in matches if m["id"] != exclude_match_id]
 
     def match_dt(m: dict) -> datetime:
         try:
@@ -311,6 +320,7 @@ def get_recent_match_records(
 
         records.append(
             {
+                "date": m["utc_date"][:10],
                 "opponent_name": opponent["name"],
                 "is_home": is_home,
                 "team_goals": team_goals,
@@ -406,6 +416,7 @@ def get_team_analysis_stats(
     reference_date: str,
     coverage_ok: bool,
     n_recent: int,
+    exclude_match_id: str | None = None,
 ) -> dict[str, Any]:
     if coverage_ok:
         data = client.get_team_stats(team_id, season_id)
@@ -415,7 +426,7 @@ def get_team_analysis_stats(
     else:
         logger.info("Coverage says team_stats unavailable for %s, using recent-matches fallback.", team_id)
 
-    fallback = stats_from_recent_matches(client, team_id, reference_date, n_recent)
+    fallback = stats_from_recent_matches(client, team_id, reference_date, n_recent, exclude_match_id=exclude_match_id)
     if fallback:
         return fallback
 
@@ -544,10 +555,10 @@ def build_payload(
     coverage = get_coverage_flags(client, competition_id, season_id)
 
     home_stats = get_team_analysis_stats(
-        client, home_team_info["id"], season_id, reference_date, coverage["team_stats"], n_recent
+        client, home_team_info["id"], season_id, reference_date, coverage["team_stats"], n_recent, exclude_match_id=match_id
     )
     away_stats = get_team_analysis_stats(
-        client, away_team_info["id"], season_id, reference_date, coverage["team_stats"], n_recent
+        client, away_team_info["id"], season_id, reference_date, coverage["team_stats"], n_recent, exclude_match_id=match_id
     )
 
     odds = None
@@ -575,8 +586,12 @@ def build_payload(
         edges["btts_yes"] = value_edge(btts["yes"], odds["btts"]["yes"])
         edges["btts_no"] = value_edge(btts["no"], odds["btts"]["no"])
 
-    home_recent = get_recent_match_records(client, home_team_info["id"], reference_date, DEFAULT_FORM_N)
-    away_recent = get_recent_match_records(client, away_team_info["id"], reference_date, DEFAULT_FORM_N)
+    home_recent = get_recent_match_records(
+        client, home_team_info["id"], reference_date, DEFAULT_FORM_N, exclude_match_id=match_id
+    )
+    away_recent = get_recent_match_records(
+        client, away_team_info["id"], reference_date, DEFAULT_FORM_N, exclude_match_id=match_id
+    )
     home_rating = rating_from_records(home_recent)
     away_rating = rating_from_records(away_recent)
     head_to_head = get_head_to_head(

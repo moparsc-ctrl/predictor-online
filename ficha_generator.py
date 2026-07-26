@@ -367,6 +367,11 @@ def _match_card(draw, x, y, w, h, record: dict[str, Any], team_color) -> None:
     pad = 20
     cy = y + pad
 
+    if record.get("date"):
+        f_date = font(14)
+        _center_text(draw, x + w / 2, cy, record["date"], f_date, SUBTEXT)
+        cy += 20
+
     prefix = "vs" if record["is_home"] else "@"
     header = f"{prefix} {record['opponent_name']}"
     f_head = font(19, bold=True)
@@ -409,7 +414,7 @@ def _render_match_by_match_ficha(payload: dict[str, Any]) -> Image.Image:
     away_records = payload["away_recent_matches"]
     n_rows = max(len(home_records), len(away_records), 1)
 
-    card_h = 190
+    card_h = 210
     card_gap_y = 20
     header_h = 170
     canvas_h = header_h + n_rows * (card_h + card_gap_y) + 80
