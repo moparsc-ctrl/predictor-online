@@ -16,7 +16,12 @@ from flask import Flask, request
 from markupsafe import escape
 
 from api_client import StatsAPIClient, StatsAPIError
-from ficha_generator import generate_ficha_bytes, generate_form_ficha_bytes, generate_match_by_match_ficha_bytes
+from ficha_generator import (
+    generate_ficha_bytes,
+    generate_form_ficha_bytes,
+    generate_h2h_ficha_bytes,
+    generate_match_by_match_ficha_bytes,
+)
 from prematch_analysis import build_payload
 
 app = Flask(__name__)
@@ -122,6 +127,7 @@ def analyze():
         f"{img_tag(generate_ficha_bytes(payload), 'Ficha pre-partido')}"
         f"{img_tag(generate_form_ficha_bytes(payload), 'Perfil de ataque y defensa')}"
         f"{img_tag(generate_match_by_match_ficha_bytes(payload), 'Resumen partido a partido')}"
+        f"{img_tag(generate_h2h_ficha_bytes(payload), 'Enfrentamientos directos')}"
         f"<div><a class='back' href='/'>&larr; Nuevo analisis</a></div>"
     )
     return render_page(body)

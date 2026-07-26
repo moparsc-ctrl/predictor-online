@@ -461,3 +461,93 @@ def generate_match_by_match_ficha_bytes(payload: dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     _render_match_by_match_ficha(payload).save(buf, "PNG")
     return buf.getvalue()
+
+
+# ------------------------------------------------------------------------ #
+# Head-to-head ficha (last N direct meetings, any competition)
+# ------------------------------------------------------------------------ #
+def _h2h_row(draw, y_top: int, record: dict[str, Any], current_home_id: str) -> None:
+    cy = y_top + 14
+    f_date = font(15)
+    comp = record.get("competition_name") or ""
+    header = f"{record['date']}  ·  {comp}" if comp else record["date"]
+    _center_text(draw, WIDTH / 2, cy, header, f_date, SUBTEXT)
+    cy += 24
+
+    home_color = ACCENT_HOME if record["home_id"] == current_home_id else ACCENT_AWAY
+    away_color = ACCENT_AWAY if record["home_id"] == current_home_id else ACCENT_HOME
+    home_goals, away_goals = record["home_goals"], record["away_goals"]
+    if home_goals > away_goals:
+        score_color = home_color
+    elif away_goals > home_goals:
+        score_color = away_color
+    else:
+        score_color = GRAY
+
+    f_name = font(19, bold=True)
+    f_score = font(21, bold=True)
+    home_text, away_text = record["home_name"], record["away_name"]
+    score_text = f"{home_goals} - {away_goals}"
+    hw = _text_w(draw, home_text, f_name)
+    sw = _text_w(draw, score_text, f_score)
+    aw = _text_w(draw, away_text, f_name)
+    gap = 18
+    start_x = WIDTH / 2 - (hw + gap + sw + gap + aw) / 2
+    draw.text((start_x, cy), home_text, font=f_name, fill=home_color)
+    draw.text((start_x + hw + gap, cy - 1), score_text, font=f_score, fill=score_color)
+    draw.text((start_x + hw + gap + sw + gap, cy), away_text, font=f_name, fill=away_color)
+
+
+def _render_h2h_ficha(payload: dict[str, Any]) -> Image.Image:
+    home = payload["home_team"]
+    records = payload.get("head_to_head", [])
+    n = payload.get("h2h_n", 5)
+
+    row_h = 80
+    header_h = 130
+    canvas_h = header_h + max(len(records), 1) * row_h + 70
+    img = Image.new("RGB", (WIDTH, canvas_h), BG)
+    draw = ImageDraw.Draw(img)
+
+    y = MARGIN
+    f_title = font(28, bold=True)
+    _center_text(draw, WIDTH / 2, y, payload.get("competition_name", "").upper(), f_title, GOLD)
+    y += 40
+    f_sub = font(18)
+    _center_text(draw, WIDTH / 2, y, f"Ultimos {n} enfrentamientos directos", f_sub, SUBTEXT)
+    y += 40
+
+    card_top = y
+    card_h_total = max(len(records), 1) * row_h
+    _rounded_rect(draw, (MARGIN, card_top, WIDTH - MARGIN, card_top + card_h_total), 14, CARD_BG)
+
+    if not records:
+        f_empty = font(20)
+        _center_text(draw, WIDTH / 2, card_top + row_h / 2 - 10, "Sin enfrentamientos previos registrados.", f_empty, SUBTEXT)
+    else:
+        for i, record in enumerate(records):
+            row_top = card_top + i * row_h
+            _h2h_row(draw, row_top, record, home["id"])
+            if i < len(records) - 1:
+                line_y = row_top + row_h
+                draw.line((MARGIN + 24, line_y, WIDTH - MARGIN - 24, line_y), fill=(52, 58, 79), width=1)
+
+    y = card_top + card_h_total + 30
+    f_foot = font(15)
+    _center_text(draw, WIDTH / 2, y, "Resultados historicos entre ambos equipos, en cualquier competicion.", f_foot, SUBTEXT)
+    y += 30
+
+    return img.crop((0, 0, WIDTH, min(canvas_h, y)))
+
+
+def generate_h2h_ficha(payload: dict[str, Any], output_path: str | Path) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _render_h2h_ficha(payload).save(output_path, "PNG")
+    return output_path
+
+
+def generate_h2h_ficha_bytes(payload: dict[str, Any]) -> bytes:
+    buf = io.BytesIO()
+    _render_h2h_ficha(payload).save(buf, "PNG")
+    return buf.getvalue()

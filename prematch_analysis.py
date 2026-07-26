@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from api_client import StatsAPIClient, StatsAPIError
-from ficha_generator import generate_ficha, generate_form_ficha, generate_match_by_match_ficha
+from ficha_generator import generate_ficha, generate_form_ficha, generate_h2h_ficha, generate_match_by_match_ficha
 from models import (
     attack_defense_rating,
     build_score_matrix,
@@ -41,6 +41,7 @@ logger = logging.getLogger("prematch_analysis")
 DEFAULT_OUTPUT_DIR = "fichas"
 DEFAULT_N_RECENT = 10
 DEFAULT_FORM_N = 5
+DEFAULT_H2H_N = 5
 DEFAULT_SEARCH_WINDOW_DAYS = 21
 BOOKMAKER_PREFERENCE = ["Pinnacle", "Bet365", "Betfair Exchange", "BetMGM UK", "Paddy Power"]
 
@@ -341,6 +342,63 @@ def rating_from_records(records: list[dict[str, Any]]) -> dict[str, float | str]
     )
 
 
+def get_head_to_head(
+    client: StatsAPIClient,
+    home_id: str,
+    away_id: str,
+    reference_date: str,
+    n: int = 5,
+    exclude_match_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Last n finished meetings between these two teams (any competition), most recent first."""
+    matches = client.list_matches(team_id=home_id, status="finished", date_to=reference_date, per_page=100)
+    if not matches:
+        return []
+
+    def match_dt(m: dict) -> datetime:
+        try:
+            return datetime.strptime(m["utc_date"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        except (ValueError, KeyError):
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    h2h = []
+    for m in matches:
+        if m["id"] == exclude_match_id:
+            continue
+        if away_id not in (m["home_team"]["id"], m["away_team"]["id"]):
+            continue
+        score = m.get("score") or {}
+        if score.get("home") is None or score.get("away") is None:
+            continue
+        h2h.append(m)
+    h2h.sort(key=match_dt, reverse=True)
+
+    comp_names: dict[str, str] = {}
+
+    def comp_name(comp_id: str) -> str:
+        if comp_id not in comp_names:
+            coverage = client.get_league_coverage(comp_id)
+            comp_names[comp_id] = (coverage or {}).get("name") or comp_id
+        return comp_names[comp_id]
+
+    records = []
+    for m in h2h[:n]:
+        score = m["score"]
+        records.append(
+            {
+                "date": m["utc_date"][:10],
+                "competition_name": comp_name(m["competition_id"]),
+                "home_id": m["home_team"]["id"],
+                "home_name": m["home_team"]["name"],
+                "away_id": m["away_team"]["id"],
+                "away_name": m["away_team"]["name"],
+                "home_goals": score["home"],
+                "away_goals": score["away"],
+            }
+        )
+    return records
+
+
 def get_team_analysis_stats(
     client: StatsAPIClient,
     team_id: str,
@@ -521,6 +579,9 @@ def build_payload(
     away_recent = get_recent_match_records(client, away_team_info["id"], reference_date, DEFAULT_FORM_N)
     home_rating = rating_from_records(home_recent)
     away_rating = rating_from_records(away_recent)
+    head_to_head = get_head_to_head(
+        client, home_team_info["id"], away_team_info["id"], reference_date, DEFAULT_H2H_N, exclude_match_id=match_id
+    )
 
     payload = {
         "home_team": home_team_info,
@@ -548,6 +609,8 @@ def build_payload(
         "home_rating": home_rating,
         "away_rating": away_rating,
         "form_n": DEFAULT_FORM_N,
+        "head_to_head": head_to_head,
+        "h2h_n": DEFAULT_H2H_N,
     }
     return payload
 
@@ -581,6 +644,7 @@ def run(args: argparse.Namespace) -> Path:
     generate_ficha(payload, output_path)
     generate_form_ficha(payload, output_dir / f"{base_name}_perfil.png")
     generate_match_by_match_ficha(payload, output_dir / f"{base_name}_partidos.png")
+    generate_h2h_ficha(payload, output_dir / f"{base_name}_h2h.png")
 
     print(f"\nFicha generada: {output_path}")
     print(f"1X2 -> Local {result['home']*100:.1f}%  Empate {result['draw']*100:.1f}%  Visita {result['away']*100:.1f}%")
