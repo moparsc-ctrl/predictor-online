@@ -12,6 +12,8 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+from models import project_combined_stat
+
 WIDTH = 1080
 MARGIN = 48
 BG = (16, 20, 33)
@@ -555,4 +557,324 @@ def generate_h2h_ficha(payload: dict[str, Any], output_path: str | Path) -> Path
 def generate_h2h_ficha_bytes(payload: dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     _render_h2h_ficha(payload).save(buf, "PNG")
+    return buf.getvalue()
+
+
+# ------------------------------------------------------------------------ #
+# Recent-form summary ficha (form/goals, per-match averages, combined
+# match-stat projection, 1X2 + double chance, betting-angle recommendation)
+# ------------------------------------------------------------------------ #
+def _pct1(x: float) -> str:
+    return f"{x * 100:.1f}%"
+
+
+def _fmt1(v: float | None) -> str:
+    return "N/D" if v is None else f"{v:.1f}"
+
+
+def _signed_int(n: float) -> str:
+    n = round(n)
+    return f"+{n}" if n > 0 else f"{n}"
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFont, max_width: float) -> list[str]:
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or _text_w(draw, candidate, f) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _draw_paragraph(draw, x, y, text, f, fill, max_width, line_height) -> int:
+    for line in _wrap_text(draw, text, f, max_width):
+        draw.text((x, y), line, font=f, fill=fill)
+        y += line_height
+    return y
+
+
+FORM_BOX_H = 210
+AVG_BOX_H = 210
+
+
+def _recent_form_box(draw, x, y, w, summary: dict[str, Any], accent_color) -> None:
+    _rounded_rect(draw, (x, y, x + w, y + FORM_BOX_H), 14, CARD_BG)
+    pad = 20
+    cy = y + pad
+
+    n = summary["games_used"]
+    f_lbl = font(15, bold=True)
+    title = f"FORMA RECIENTE (ULTIMOS {n})" if n else "FORMA RECIENTE"
+    _center_text(draw, x + w / 2, cy, title, f_lbl, SUBTEXT)
+    cy += 30
+
+    max_pts = n * 3
+    f_big = font(30, bold=True)
+    _center_text(draw, x + w / 2, cy, f"{summary['points']} / {max_pts} pts", f_big, accent_color)
+    cy += 48
+
+    goal_diff = summary["goals_for"] - summary["goals_against"]
+    diff_color = GREEN if goal_diff > 0 else (RED if goal_diff < 0 else GRAY)
+    rows = [
+        ("Goles a favor", f"{summary['goals_for']:.0f}", TEXT),
+        ("Goles en contra", f"{summary['goals_against']:.0f}", TEXT),
+        ("Diferencia de gol", _signed_int(goal_diff), diff_color),
+    ]
+    f_row_lbl = font(16)
+    f_row_val = font(18, bold=True)
+    for label, val, color in rows:
+        draw.text((x + pad, cy), label, font=f_row_lbl, fill=SUBTEXT)
+        vw = _text_w(draw, val, f_row_val)
+        draw.text((x + w - pad - vw, cy - 1), val, font=f_row_val, fill=color)
+        cy += 26
+
+
+def _recent_averages_box(draw, x, y, w, summary: dict[str, Any], xg_estimate: float) -> None:
+    _rounded_rect(draw, (x, y, x + w, y + AVG_BOX_H), 14, CARD_BG)
+    pad = 20
+    cy = y + pad
+
+    f_lbl = font(15, bold=True)
+    _center_text(draw, x + w / 2, cy, "PROMEDIO POR PARTIDO", f_lbl, SUBTEXT)
+    cy += 30
+
+    rows = [
+        ("Tiros (favor/contra)", f"{_fmt1(summary['avg_shots_for'])} / {_fmt1(summary['avg_shots_against'])}"),
+        ("A puerta (favor/contra)", f"{_fmt1(summary['avg_sot_for'])} / {_fmt1(summary['avg_sot_against'])}"),
+        ("Corners (favor/contra)", f"{_fmt1(summary['avg_corners_for'])} / {_fmt1(summary['avg_corners_against'])}"),
+    ]
+    f_row_lbl = font(16)
+    f_row_val = font(17, bold=True)
+    for label, val in rows:
+        draw.text((x + pad, cy), label, font=f_row_lbl, fill=SUBTEXT)
+        vw = _text_w(draw, val, f_row_val)
+        draw.text((x + w - pad - vw, cy - 1), val, font=f_row_val, fill=TEXT)
+        cy += 26
+
+    cy += 8
+    draw.line((x + pad, cy, x + w - pad, cy), fill=(52, 58, 79), width=1)
+    cy += 16
+    f_xg_lbl = font(14)
+    _center_text(draw, x + w / 2, cy, "XG ESTIMADO", f_xg_lbl, SUBTEXT)
+    cy += 20
+    f_xg_val = font(24, bold=True)
+    _center_text(draw, x + w / 2, cy, f"{xg_estimate:.1f}", f_xg_val, TEXT)
+
+
+def _combined_estimate_box(draw, y, home_summary: dict[str, Any], away_summary: dict[str, Any]) -> int:
+    rows_def = [
+        (
+            "Tiros",
+            project_combined_stat(
+                home_summary["avg_shots_for"],
+                away_summary["avg_shots_against"],
+                away_summary["avg_shots_for"],
+                home_summary["avg_shots_against"],
+            ),
+        ),
+        (
+            "A puerta",
+            project_combined_stat(
+                home_summary["avg_sot_for"],
+                away_summary["avg_sot_against"],
+                away_summary["avg_sot_for"],
+                home_summary["avg_sot_against"],
+            ),
+        ),
+        (
+            "Corners",
+            project_combined_stat(
+                home_summary["avg_corners_for"],
+                away_summary["avg_corners_against"],
+                away_summary["avg_corners_for"],
+                home_summary["avg_corners_against"],
+            ),
+        ),
+    ]
+
+    pad = 20
+    row_h = 32
+    box_h = 32 + len(rows_def) * row_h + 16
+    box_x0, box_x1 = MARGIN, WIDTH - MARGIN
+    _rounded_rect(draw, (box_x0, y, box_x1, y + box_h), 14, CARD_BG)
+
+    cy = y + 18
+    f_lbl = font(15, bold=True)
+    _center_text(draw, WIDTH / 2, cy, "ESTIMADO DEL PARTIDO (TOTAL COMBINADO)", f_lbl, SUBTEXT)
+    cy += 32
+
+    f_row_lbl = font(17, bold=True)
+    f_row_val = font(18, bold=True)
+    label_x = box_x0 + pad
+    home_x = box_x0 + 190
+    plus_x = box_x0 + 290
+    away_x = box_x0 + 320
+    total_right = box_x1 - pad
+
+    for label, (home_v, away_v, total_v) in rows_def:
+        draw.text((label_x, cy), label, font=f_row_lbl, fill=TEXT)
+        draw.text((home_x, cy), _fmt1(home_v), font=f_row_val, fill=ACCENT_HOME)
+        draw.text((plus_x, cy), "+", font=f_row_lbl, fill=SUBTEXT)
+        draw.text((away_x, cy), _fmt1(away_v), font=f_row_val, fill=ACCENT_AWAY)
+        total_text = f"Total: {_fmt1(total_v)}"
+        tw = _text_w(draw, total_text, f_row_lbl)
+        draw.text((total_right - tw, cy), total_text, font=f_row_lbl, fill=SUBTEXT)
+        cy += row_h
+
+    return y + box_h
+
+
+def _probability_block(draw, y, home_name: str, away_name: str, payload: dict[str, Any]) -> int:
+    result = payload["model"]["result"]
+    dc = payload["model"]["double_chance"]
+
+    pad = 20
+    box_x0, box_x1 = MARGIN, WIDTH - MARGIN
+    bar_w = box_x1 - box_x0 - 2 * pad
+    box_h = 32 + 16 + 30 + 16 + 24 + 16 + 24 + 24 + 16
+    _rounded_rect(draw, (box_x0, y, box_x1, y + box_h), 14, CARD_BG)
+
+    cy = y + 18
+    f_lbl = font(15, bold=True)
+    _center_text(draw, WIDTH / 2, cy, "PROBABILIDADES DE RESULTADO (MODELO POISSON, SEGUN XG)", f_lbl, SUBTEXT)
+    cy += 34
+
+    bar_x = box_x0 + pad
+    bar_h = 14
+    home_p, draw_p, away_p = result["home"], result["draw"], result["away"]
+    seg_home = int(bar_w * home_p)
+    seg_draw = int(bar_w * draw_p)
+    _rounded_rect(draw, (bar_x, cy, bar_x + bar_w, cy + bar_h), bar_h // 2, (52, 58, 79))
+    draw.rectangle((bar_x, cy, bar_x + seg_home, cy + bar_h), fill=ACCENT_HOME)
+    draw.rectangle((bar_x + seg_home, cy, bar_x + seg_home + seg_draw, cy + bar_h), fill=GRAY)
+    draw.rectangle((bar_x + seg_home + seg_draw, cy, bar_x + bar_w, cy + bar_h), fill=ACCENT_AWAY)
+    cy += bar_h + 14
+
+    f_res = font(17, bold=True)
+    draw.text((bar_x, cy), f"1: {_pct1(home_p)}", font=f_res, fill=ACCENT_HOME)
+    _center_text(draw, WIDTH / 2, cy, f"X: {_pct1(draw_p)}", f_res, TEXT)
+    away_text = f"2: {_pct1(away_p)}"
+    aw = _text_w(draw, away_text, f_res)
+    draw.text((bar_x + bar_w - aw, cy), away_text, font=f_res, fill=ACCENT_AWAY)
+    cy += 34
+
+    f_dc_lbl = font(16)
+    f_dc_val = font(16, bold=True)
+    dc_rows = [
+        (f"Doble oportunidad X2 (empate o {away_name}):", dc["draw_or_away"]),
+        (f"Doble oportunidad 1X ({home_name} o empate):", dc["home_or_draw"]),
+    ]
+    for label, value in dc_rows:
+        draw.text((bar_x, cy), label, font=f_dc_lbl, fill=SUBTEXT)
+        val_text = _pct1(value)
+        vw = _text_w(draw, val_text, f_dc_val)
+        draw.text((bar_x + bar_w - vw, cy), val_text, font=f_dc_val, fill=TEXT)
+        cy += 24
+
+    return y + box_h
+
+
+def _recommendation_box(draw, y, recommendation: dict[str, Any]) -> int:
+    pad = 22
+    border_w = 6
+    box_x0, box_x1 = MARGIN, WIDTH - MARGIN
+    max_text_w = box_x1 - box_x0 - 2 * pad - border_w
+
+    f_kicker = font(15, bold=True)
+    f_market = font(22, bold=True)
+    f_body = font(16)
+    line_h = 24
+
+    body_lines = _wrap_text(draw, recommendation["rationale"], f_body, max_text_w)
+    box_h = pad + 20 + 10 + 30 + 12 + len(body_lines) * line_h + pad
+
+    _rounded_rect(draw, (box_x0, y, box_x1, y + box_h), 14, (18, 38, 30))
+    draw.rectangle((box_x0, y, box_x0 + border_w, y + box_h), fill=GREEN)
+
+    cy = y + pad
+    text_x = box_x0 + border_w + pad
+    draw.text((text_x, cy), "RECOMENDACION DE APUESTA", font=f_kicker, fill=GREEN)
+    cy += 30
+    draw.text((text_x, cy), recommendation["market"], font=f_market, fill=TEXT)
+    cy += 42
+    _draw_paragraph(draw, text_x, cy, recommendation["rationale"], f_body, SUBTEXT, max_text_w, line_h)
+
+    return y + box_h
+
+
+def _render_recent_form_summary_ficha(payload: dict[str, Any]) -> Image.Image:
+    home = payload["home_team"]
+    away = payload["away_team"]
+    home_summary = payload["home_recent_summary"]
+    away_summary = payload["away_recent_summary"]
+    recommendation = payload["recommendation"]
+
+    canvas_h = 1700
+    img = Image.new("RGB", (WIDTH, canvas_h), BG)
+    draw = ImageDraw.Draw(img)
+
+    y = MARGIN
+    f_title = font(26, bold=True)
+    _center_text(draw, WIDTH / 2, y, payload.get("competition_name", "").upper(), f_title, GOLD)
+    y += 36
+    f_sub = font(17)
+    _center_text(draw, WIDTH / 2, y, "Proyeccion del partido", f_sub, SUBTEXT)
+    y += 44
+
+    gap_x = 24
+    col_w = (WIDTH - 2 * MARGIN - gap_x) / 2
+    col_x_home = MARGIN
+    col_x_away = MARGIN + col_w + gap_x
+
+    f_team = font(23, bold=True)
+    _center_text(draw, col_x_home + col_w / 2, y, home["name"], f_team, ACCENT_HOME)
+    _center_text(draw, col_x_away + col_w / 2, y, away["name"], f_team, ACCENT_AWAY)
+    y += 40
+
+    _recent_form_box(draw, col_x_home, y, col_w, home_summary, ACCENT_HOME)
+    _recent_form_box(draw, col_x_away, y, col_w, away_summary, ACCENT_AWAY)
+    y += FORM_BOX_H + 16
+
+    _recent_averages_box(draw, col_x_home, y, col_w, home_summary, payload.get("lambda_home", 0.0))
+    _recent_averages_box(draw, col_x_away, y, col_w, away_summary, payload.get("lambda_away", 0.0))
+    y += AVG_BOX_H + 16
+
+    y = _combined_estimate_box(draw, y, home_summary, away_summary)
+    y += 16
+
+    y = _probability_block(draw, y, home["name"], away["name"], payload)
+    y += 16
+
+    y = _recommendation_box(draw, y, recommendation)
+    y += 20
+
+    f_foot = font(14)
+    n = min(home_summary["games_used"], away_summary["games_used"])
+    disclaimer = (
+        f"Proyeccion basada en estadisticas de los ultimos {n or 'N'} partidos de cada equipo. "
+        "Estimacion estadistica, no una garantia de resultado."
+    )
+    y = _draw_paragraph(draw, MARGIN, y, disclaimer, f_foot, SUBTEXT, WIDTH - 2 * MARGIN, 20)
+    y += 20
+
+    return img.crop((0, 0, WIDTH, min(canvas_h, y)))
+
+
+def generate_recent_form_summary_ficha(payload: dict[str, Any], output_path: str | Path) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _render_recent_form_summary_ficha(payload).save(output_path, "PNG")
+    return output_path
+
+
+def generate_recent_form_summary_ficha_bytes(payload: dict[str, Any]) -> bytes:
+    buf = io.BytesIO()
+    _render_recent_form_summary_ficha(payload).save(buf, "PNG")
     return buf.getvalue()

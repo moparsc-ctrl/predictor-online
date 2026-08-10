@@ -22,7 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from api_client import StatsAPIClient, StatsAPIError
-from ficha_generator import generate_ficha, generate_form_ficha, generate_h2h_ficha, generate_match_by_match_ficha
+from ficha_generator import (
+    generate_ficha,
+    generate_form_ficha,
+    generate_h2h_ficha,
+    generate_match_by_match_ficha,
+    generate_recent_form_summary_ficha,
+)
 from models import (
     attack_defense_rating,
     build_score_matrix,
@@ -34,6 +40,7 @@ from models import (
     result_probabilities,
     value_edge,
 )
+from recommendation import build_betting_recommendation
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("prematch_analysis")
@@ -352,6 +359,39 @@ def rating_from_records(records: list[dict[str, Any]]) -> dict[str, float | str]
     )
 
 
+def summarize_recent_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Points, goals, and per-match shot/SOT/corner averages from a team's
+    last N finished-match records (as returned by get_recent_match_records).
+    """
+
+    def avg(values: list[float | None]) -> float | None:
+        clean = [v for v in values if v is not None]
+        return statistics.fmean(clean) if clean else None
+
+    def total(values: list[int | None]) -> int:
+        return sum(v for v in values if v is not None)
+
+    points = 0
+    for r in records:
+        if r["team_goals"] > r["opp_goals"]:
+            points += 3
+        elif r["team_goals"] == r["opp_goals"]:
+            points += 1
+
+    return {
+        "games_used": len(records),
+        "points": points,
+        "goals_for": total(r["team_goals"] for r in records),
+        "goals_against": total(r["opp_goals"] for r in records),
+        "avg_shots_for": avg([r["team_shots"] for r in records]),
+        "avg_shots_against": avg([r["opp_shots"] for r in records]),
+        "avg_sot_for": avg([r["team_sot"] for r in records]),
+        "avg_sot_against": avg([r["opp_sot"] for r in records]),
+        "avg_corners_for": avg([r["team_corners"] for r in records]),
+        "avg_corners_against": avg([r["opp_corners"] for r in records]),
+    }
+
+
 def get_head_to_head(
     client: StatsAPIClient,
     home_id: str,
@@ -598,6 +638,24 @@ def build_payload(
         client, home_team_info["id"], away_team_info["id"], reference_date, DEFAULT_H2H_N, exclude_match_id=match_id
     )
 
+    home_recent_summary = summarize_recent_records(home_recent)
+    away_recent_summary = summarize_recent_records(away_recent)
+    recommendation = build_betting_recommendation(
+        home_name=home_team_info["name"],
+        away_name=away_team_info["name"],
+        result=result,
+        double_chance=dc,
+        btts=btts,
+        home_xg=lambda_home,
+        away_xg=lambda_away,
+        home_goal_diff=home_recent_summary["goals_for"] - home_recent_summary["goals_against"],
+        away_goal_diff=away_recent_summary["goals_for"] - away_recent_summary["goals_against"],
+        home_points=home_recent_summary["points"],
+        away_points=away_recent_summary["points"],
+        home_games_used=home_recent_summary["games_used"],
+        away_games_used=away_recent_summary["games_used"],
+    )
+
     payload = {
         "home_team": home_team_info,
         "away_team": away_team_info,
@@ -626,6 +684,9 @@ def build_payload(
         "form_n": DEFAULT_FORM_N,
         "head_to_head": head_to_head,
         "h2h_n": DEFAULT_H2H_N,
+        "home_recent_summary": home_recent_summary,
+        "away_recent_summary": away_recent_summary,
+        "recommendation": recommendation,
     }
     return payload
 
@@ -660,6 +721,7 @@ def run(args: argparse.Namespace) -> Path:
     generate_form_ficha(payload, output_dir / f"{base_name}_perfil.png")
     generate_match_by_match_ficha(payload, output_dir / f"{base_name}_partidos.png")
     generate_h2h_ficha(payload, output_dir / f"{base_name}_h2h.png")
+    generate_recent_form_summary_ficha(payload, output_dir / f"{base_name}_forma_reciente.png")
 
     print(f"\nFicha generada: {output_path}")
     print(f"1X2 -> Local {result['home']*100:.1f}%  Empate {result['draw']*100:.1f}%  Visita {result['away']*100:.1f}%")

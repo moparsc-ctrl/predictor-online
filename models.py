@@ -142,6 +142,23 @@ def value_edge(model_prob: float, decimal_odd: float | None) -> float | None:
     return model_prob - implied_probability(decimal_odd)
 
 
+def project_combined_stat(
+    home_for: float | None,
+    away_against: float | None,
+    away_for: float | None,
+    home_against: float | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Projects a single match stat (shots, shots on target, corners...) for
+    one specific fixture by averaging each side's own "for" rate with the
+    opponent's "against" rate on the same stat, e.g. projected home shots =
+    avg(home shots-for, away shots-against). Returns (home, away, total).
+    """
+    home = None if home_for is None or away_against is None else (home_for + away_against) / 2
+    away = None if away_for is None or home_against is None else (away_for + home_against) / 2
+    total = None if home is None or away is None else home + away
+    return home, away, total
+
+
 def _avg(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 

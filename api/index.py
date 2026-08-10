@@ -21,6 +21,7 @@ from ficha_generator import (
     generate_form_ficha_bytes,
     generate_h2h_ficha_bytes,
     generate_match_by_match_ficha_bytes,
+    generate_recent_form_summary_ficha_bytes,
 )
 from prematch_analysis import build_payload
 
@@ -125,6 +126,7 @@ def analyze():
     body = (
         f"{summary}"
         f"{img_tag(generate_ficha_bytes(payload), 'Ficha pre-partido')}"
+        f"{img_tag(generate_recent_form_summary_ficha_bytes(payload), 'Forma reciente y recomendacion')}"
         f"{img_tag(generate_form_ficha_bytes(payload), 'Perfil de ataque y defensa')}"
         f"{img_tag(generate_match_by_match_ficha_bytes(payload), 'Resumen partido a partido')}"
         f"{img_tag(generate_h2h_ficha_bytes(payload), 'Enfrentamientos directos')}"
