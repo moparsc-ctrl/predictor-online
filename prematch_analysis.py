@@ -460,9 +460,15 @@ def get_team_analysis_stats(
 ) -> dict[str, Any]:
     if coverage_ok:
         data = client.get_team_stats(team_id, season_id)
-        if data:
+        if data and data.get("matches_played"):
             return stats_from_team_stats_endpoint(team_id, season_id, data)
-        logger.info("Team stats unavailable (404/error) for %s, falling back to recent matches.", team_id)
+        if data:
+            logger.info(
+                "Team stats for %s report 0 matches played this season (early season?), falling back to recent matches.",
+                team_id,
+            )
+        else:
+            logger.info("Team stats unavailable (404/error) for %s, falling back to recent matches.", team_id)
     else:
         logger.info("Coverage says team_stats unavailable for %s, using recent-matches fallback.", team_id)
 
