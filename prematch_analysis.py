@@ -69,8 +69,16 @@ def _normalize_name(name: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).lower().strip()
 
 
+def _looks_like_id(value: str, prefix: str) -> bool:
+    return value.strip().lower().startswith(prefix)
+
+
 def resolve_team_candidates(client: StatsAPIClient, name: str, limit: int = 5) -> list[dict]:
     """Search results for `name`, exact (accent-insensitive) matches first.
+
+    If `name` is actually a team ID (starts with "tm_"), fetch it directly
+    instead of running it through name search — search on a raw ID string
+    would just return nothing or the wrong team.
 
     Team search can return several same-named or oddly-ranked entries (a
     reserve squad, a same-named club in another country, a duplicate row) and
@@ -78,6 +86,11 @@ def resolve_team_candidates(client: StatsAPIClient, name: str, limit: int = 5) -
     alone. Callers should try these in order against find_match rather than
     trusting the first result.
     """
+    trimmed = name.strip()
+    if _looks_like_id(trimmed, "tm_"):
+        team = client.get_team(trimmed)
+        return [team] if team else []
+
     results = client.search_teams(name)
     if not results:
         return []

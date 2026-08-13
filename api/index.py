@@ -50,6 +50,9 @@ PAGE_HEAD = """<!doctype html>
   .row > div { flex:1; }
   img { max-width:100%; border-radius:8px; margin-top:20px; }
   a.back { color:#4da3ff; display:inline-block; margin-top:16px; }
+  .hint { font-size:12px; color:#6d7793; margin:2px 0 0; }
+  .divider { display:flex; align-items:center; gap:10px; color:#6d7793; font-size:13px; margin:4px 0; }
+  .divider::before, .divider::after { content:""; flex:1; height:1px; background:#333c54; }
 </style>
 </head>
 <body>
@@ -64,17 +67,28 @@ FORM_HTML = """
   <div class="row">
     <div>
       <label for="home">Equipo local</label>
-      <input id="home" name="home" placeholder="Real Madrid" required>
+      <input id="home" name="home" placeholder="CF Monterrey o tm_97234">
+      <p class="hint">Nombre o ID de equipo (tm_...)</p>
     </div>
     <div>
       <label for="away">Equipo visitante</label>
-      <input id="away" name="away" placeholder="Barcelona" required>
+      <input id="away" name="away" placeholder="Nashville SC o tm_9241601">
+      <p class="hint">Nombre o ID de equipo (tm_...)</p>
     </div>
   </div>
   <div>
     <label for="date">Fecha aproximada (opcional)</label>
     <input id="date" name="date" placeholder="2026-08-15">
   </div>
+
+  <div class="divider">o</div>
+
+  <div>
+    <label for="match_id">ID de partido directo</label>
+    <input id="match_id" name="match_id" placeholder="mt_893557446">
+    <p class="hint">Si lo llenas, se usa este partido directamente y se ignoran los campos de arriba.</p>
+  </div>
+
   <button type="submit">Generar ficha</button>
 </form>
 """
