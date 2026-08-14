@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -54,6 +55,8 @@ PAGE_HEAD = """<!doctype html>
   img { max-width:100%; border-radius:8px; margin-top:20px; }
   a.back { color:#4da3ff; display:inline-block; margin-top:16px; }
   .hint { font-size:12px; color:#6d7793; margin:2px 0 0; }
+  pre.debug { background:#0f1320; border:1px solid #333c54; border-radius:8px; padding:12px;
+              font-size:12px; overflow-x:auto; white-space:pre-wrap; word-break:break-word; color:#ffb3b3; }
   .divider { display:flex; align-items:center; gap:10px; color:#6d7793; font-size:13px; margin:4px 0; }
   .divider::before, .divider::after { content:""; flex:1; height:1px; background:#333c54; }
 </style>
@@ -134,9 +137,8 @@ def analyze():
             home, away, match_id, date,
         )
         error = (
-            "<p class='error'>Ocurrio un error inesperado analizando este partido "
-            "(probablemente un dato inusual o faltante en TheStatsAPI para este caso). "
-            "Prueba con otro partido; si el problema persiste, revisa los logs del servidor.</p>"
+            "<p class='error'>Ocurrio un error inesperado analizando este partido.</p>"
+            f"<pre class='debug'>{escape(traceback.format_exc())}</pre>"
         )
         return render_page(error + FORM_HTML), 500
 
@@ -168,8 +170,9 @@ def analyze():
             payload.get("away_team", {}).get("name"),
         )
         error = (
-            "<p class='error'>Se obtuvieron los datos del partido pero ocurrio un error inesperado "
-            "generando las imagenes. Avisa para revisar los logs del servidor.</p>"
+            "<p class='error'>Se obtuvieron los datos del partido pero ocurrio un error "
+            "inesperado generando las imagenes.</p>"
+            f"<pre class='debug'>{escape(traceback.format_exc())}</pre>"
         )
         return render_page(error + FORM_HTML), 500
 
