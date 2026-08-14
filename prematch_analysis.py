@@ -595,12 +595,31 @@ def build_payload(
         if not detail:
             raise ValueError(f"No se pudo obtener el detalle del partido {match['id']}.")
 
-    match_id = detail["id"]
-    competition_id = detail["competition_id"]
-    season_id = detail["season_id"]
-    home_team_info = detail["home_team"]
-    away_team_info = detail["away_team"]
-    reference_date = detail["utc_date"][:10]
+    match_id = detail.get("id") or match_id
+    competition_id = detail.get("competition_id")
+    season_id = detail.get("season_id")
+    home_team_info = detail.get("home_team")
+    away_team_info = detail.get("away_team")
+    utc_date = detail.get("utc_date")
+
+    missing = [
+        field
+        for field, value in (
+            ("competition_id", competition_id),
+            ("season_id", season_id),
+            ("home_team", home_team_info),
+            ("away_team", away_team_info),
+            ("utc_date", utc_date),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            f"El partido {match_id} no trae los datos necesarios ({', '.join(missing)}). "
+            "Puede que sea un partido amistoso o sin temporada/competicion asignada en TheStatsAPI."
+        )
+
+    reference_date = utc_date[:10]
 
     logger.info(
         "Partido resuelto: %s vs %s (%s) el %s [match_id=%s]",

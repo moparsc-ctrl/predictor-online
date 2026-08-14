@@ -7,6 +7,7 @@ it can also be run directly with `python api/index.py` for testing.
 from __future__ import annotations
 
 import base64
+import logging
 import sys
 from pathlib import Path
 
@@ -24,6 +25,8 @@ from ficha_generator import (
     generate_recent_form_summary_ficha_bytes,
 )
 from prematch_analysis import build_payload
+
+logger = logging.getLogger("statsapi.web")
 
 app = Flask(__name__)
 
@@ -125,27 +128,51 @@ def analyze():
     except ValueError as exc:
         error = f"<p class='error'>{escape(str(exc))}</p>"
         return render_page(error + FORM_HTML), 404
+    except Exception:
+        logger.exception(
+            "Unexpected error building payload (home=%r away=%r match_id=%r date=%r)",
+            home, away, match_id, date,
+        )
+        error = (
+            "<p class='error'>Ocurrio un error inesperado analizando este partido "
+            "(probablemente un dato inusual o faltante en TheStatsAPI para este caso). "
+            "Prueba con otro partido; si el problema persiste, revisa los logs del servidor.</p>"
+        )
+        return render_page(error + FORM_HTML), 500
 
     def img_tag(png_bytes: bytes, alt: str) -> str:
         b64 = base64.b64encode(png_bytes).decode("ascii")
         return f"<img src='data:image/png;base64,{b64}' alt='{alt}'>"
 
-    result = payload["model"]["result"]
-    btts = payload["model"]["btts"]
-    summary = (
-        f"<p>1X2 &rarr; Local {result['home']*100:.1f}% &middot; "
-        f"Empate {result['draw']*100:.1f}% &middot; Visita {result['away']*100:.1f}%<br>"
-        f"BTTS &rarr; Si {btts['yes']*100:.1f}% &middot; No {btts['no']*100:.1f}%</p>"
-    )
-    body = (
-        f"{summary}"
-        f"{img_tag(generate_ficha_bytes(payload), 'Ficha pre-partido')}"
-        f"{img_tag(generate_recent_form_summary_ficha_bytes(payload), 'Forma reciente y recomendacion')}"
-        f"{img_tag(generate_form_ficha_bytes(payload), 'Perfil de ataque y defensa')}"
-        f"{img_tag(generate_match_by_match_ficha_bytes(payload), 'Resumen partido a partido')}"
-        f"{img_tag(generate_h2h_ficha_bytes(payload), 'Enfrentamientos directos')}"
-        f"<div><a class='back' href='/'>&larr; Nuevo analisis</a></div>"
-    )
+    try:
+        result = payload["model"]["result"]
+        btts = payload["model"]["btts"]
+        summary = (
+            f"<p>1X2 &rarr; Local {result['home']*100:.1f}% &middot; "
+            f"Empate {result['draw']*100:.1f}% &middot; Visita {result['away']*100:.1f}%<br>"
+            f"BTTS &rarr; Si {btts['yes']*100:.1f}% &middot; No {btts['no']*100:.1f}%</p>"
+        )
+        body = (
+            f"{summary}"
+            f"{img_tag(generate_ficha_bytes(payload), 'Ficha pre-partido')}"
+            f"{img_tag(generate_recent_form_summary_ficha_bytes(payload), 'Forma reciente y recomendacion')}"
+            f"{img_tag(generate_form_ficha_bytes(payload), 'Perfil de ataque y defensa')}"
+            f"{img_tag(generate_match_by_match_ficha_bytes(payload), 'Resumen partido a partido')}"
+            f"{img_tag(generate_h2h_ficha_bytes(payload), 'Enfrentamientos directos')}"
+            f"<div><a class='back' href='/'>&larr; Nuevo analisis</a></div>"
+        )
+    except Exception:
+        logger.exception(
+            "Unexpected error rendering fichas (%r vs %r)",
+            payload.get("home_team", {}).get("name"),
+            payload.get("away_team", {}).get("name"),
+        )
+        error = (
+            "<p class='error'>Se obtuvieron los datos del partido pero ocurrio un error inesperado "
+            "generando las imagenes. Avisa para revisar los logs del servidor.</p>"
+        )
+        return render_page(error + FORM_HTML), 500
+
     return render_page(body)
 
 
