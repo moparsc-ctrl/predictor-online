@@ -234,12 +234,17 @@ def _render_ficha(payload: dict[str, Any]) -> Image.Image:
     if top_scores:
         y = _section_title(draw, y, "Marcadores mas probables")
         f_score = font(20, bold=True)
-        col_w = (WIDTH - 2 * MARGIN) / len(top_scores)
+        cols_per_row = 5
+        row_h = 56
+        col_w = (WIDTH - 2 * MARGIN) / min(len(top_scores), cols_per_row)
         for i, (hx, ay, p) in enumerate(top_scores):
-            cx = MARGIN + col_w * i + col_w / 2
-            _center_text(draw, cx, y, f"{hx}-{ay}", f_score, TEXT)
-            _center_text(draw, cx, y + 26, _pct(p), f_score, SUBTEXT)
-        y += 60
+            row, col = divmod(i, cols_per_row)
+            cx = MARGIN + col_w * col + col_w / 2
+            row_y = y + row * row_h
+            _center_text(draw, cx, row_y, f"{hx}-{ay}", f_score, TEXT)
+            _center_text(draw, cx, row_y + 26, _pct(p), f_score, SUBTEXT)
+        n_rows = -(-len(top_scores) // cols_per_row)  # ceil division
+        y += n_rows * row_h + 4
 
     # Odds
     odds = payload.get("odds")

@@ -634,7 +634,7 @@ def build_payload(
     dc = double_chance_probabilities(result)
     btts = btts_probabilities(matrix)
     ou = over_under_probabilities(matrix)
-    top_scores = most_likely_scorelines(matrix, 5)
+    top_scores = most_likely_scorelines(matrix, 10)
 
     edges: dict[str, float | None] = {}
     if odds:
