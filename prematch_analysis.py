@@ -53,6 +53,19 @@ DEFAULT_SEARCH_WINDOW_DAYS = 21
 BOOKMAKER_PREFERENCE = ["Pinnacle", "Bet365", "Betfair Exchange", "BetMGM UK", "Paddy Power"]
 
 
+def _safe_dict(value: Any) -> dict:
+    """Coerce a possibly-None API field into a dict.
+
+    dict.get(key, default) only falls back to `default` when the key is
+    missing -- not when its value is explicitly null. TheStatsAPI does
+    return explicit nulls for sections it has no data for (e.g. match stats
+    with a null "overview" for a lower-coverage match), which used to crash
+    every chained .get(...) call after it. Route any such field through
+    this first.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 # ---------------------------------------------------------------------- #
 # Team / match resolution
 # ---------------------------------------------------------------------- #
@@ -184,11 +197,11 @@ def get_coverage_flags(client: StatsAPIClient, competition_id: str, season_id: s
         return default
     for season in coverage.get("seasons", []):
         if season.get("id") == season_id:
-            data_types = season.get("data_types", {})
+            data_types = _safe_dict(season.get("data_types"))
             return {
-                "team_stats": data_types.get("team_stats", {}).get("available", True),
-                "xg": data_types.get("xg", {}).get("available", True),
-                "odds": data_types.get("odds", {}).get("available", True),
+                "team_stats": _safe_dict(data_types.get("team_stats")).get("available", True),
+                "xg": _safe_dict(data_types.get("xg")).get("available", True),
+                "odds": _safe_dict(data_types.get("odds")).get("available", True),
             }
     logger.info("Season %s not found in coverage for %s, will try calls directly.", season_id, competition_id)
     return default
@@ -257,7 +270,8 @@ def stats_from_recent_matches(
         gf, ga = real_gf, real_ga
         if m.get("xg_available"):
             match_stats = client.get_match_stats(m["id"])
-            xg = (match_stats or {}).get("overview", {}).get("expected_goals", {}).get("all") if match_stats else None
+            overview = _safe_dict(_safe_dict(match_stats).get("overview"))
+            xg = _safe_dict(overview.get("expected_goals")).get("all")
             if xg and xg.get("home") is not None and xg.get("away") is not None:
                 gf = xg["home"] if is_home else xg["away"]
                 ga = xg["away"] if is_home else xg["home"]
@@ -326,7 +340,7 @@ def get_recent_match_records(
             continue
 
         match_stats = client.get_match_stats(m["id"]) or {}
-        overview = match_stats.get("overview", {})
+        overview = _safe_dict(match_stats.get("overview"))
 
         def side(stat_key: str) -> tuple[float | None, float | None]:
             block = (overview.get(stat_key) or {}).get("all") or {}
@@ -521,10 +535,10 @@ def extract_odds(client: StatsAPIClient, match_id: str) -> dict[str, Any] | None
     book = pick_bookmaker(data["bookmakers"])
     if not book:
         return None
-    markets = book.get("markets", {})
-    match_odds = markets.get("match_odds", {})
-    btts = markets.get("btts", {})
-    double_chance = markets.get("double_chance", {})
+    markets = _safe_dict(book.get("markets"))
+    match_odds = _safe_dict(markets.get("match_odds"))
+    btts = _safe_dict(markets.get("btts"))
+    double_chance = _safe_dict(markets.get("double_chance"))
     return {
         "bookmaker": book.get("bookmaker"),
         "match_odds": {
