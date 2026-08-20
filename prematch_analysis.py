@@ -48,6 +48,7 @@ logger = logging.getLogger("prematch_analysis")
 DEFAULT_OUTPUT_DIR = "fichas"
 DEFAULT_N_RECENT = 10
 DEFAULT_FORM_N = 5
+DEFAULT_RECENT_SUMMARY_N = 10  # window used only by the recent-form-summary ficha
 DEFAULT_H2H_N = 5
 DEFAULT_SEARCH_WINDOW_DAYS = 21
 BOOKMAKER_PREFERENCE = ["Pinnacle", "Bet365", "Betfair Exchange", "BetMGM UK", "Paddy Power"]
@@ -476,6 +477,14 @@ def get_head_to_head(
     return records
 
 
+# How many current-season matches it takes before the season snapshot is
+# trusted on its own. Below this, the cross-season recency fallback (which
+# naturally rolls into last season's matches when this season is thin) fills
+# in the rest of the weight -- so early in a new season the model leans on
+# actual recent history instead of a 1-2 game season average.
+SEASON_FULL_CONFIDENCE_MATCHES = 8
+
+
 def get_team_analysis_stats(
     client: StatsAPIClient,
     team_id: str,
@@ -485,26 +494,58 @@ def get_team_analysis_stats(
     n_recent: int,
     exclude_match_id: str | None = None,
 ) -> dict[str, Any]:
+    """Blends this season's team_stats (once there's enough of a sample) with
+    a recency-sorted window of the team's actual recent matches, which spans
+    into the previous season on its own when the current one hasn't produced
+    enough games yet. The recent-matches side already weights "recent" by
+    construction (most recent N games, xG-aware) and the season side's
+    weight grows with matches_played, so the model is never fully at the
+    mercy of a tiny early-season sample nor fully blind to current form once
+    the season is established.
+    """
+    season_stats: dict[str, Any] | None = None
+    matches_played = 0
+
     if coverage_ok:
         data = client.get_team_stats(team_id, season_id)
         if data and data.get("matches_played"):
-            return stats_from_team_stats_endpoint(team_id, season_id, data)
-        if data:
-            logger.info(
-                "Team stats for %s report 0 matches played this season (early season?), falling back to recent matches.",
-                team_id,
-            )
+            matches_played = data["matches_played"]
+            season_stats = stats_from_team_stats_endpoint(team_id, season_id, data)
+        elif data:
+            logger.info("Team stats for %s report 0 matches played this season so far.", team_id)
         else:
-            logger.info("Team stats unavailable (404/error) for %s, falling back to recent matches.", team_id)
+            logger.info("Team stats unavailable (404/error) for %s.", team_id)
     else:
-        logger.info("Coverage says team_stats unavailable for %s, using recent-matches fallback.", team_id)
+        logger.info("Coverage says team_stats unavailable for %s.", team_id)
 
-    fallback = stats_from_recent_matches(client, team_id, reference_date, n_recent, exclude_match_id=exclude_match_id)
-    if fallback:
-        return fallback
+    recent_stats = stats_from_recent_matches(client, team_id, reference_date, n_recent, exclude_match_id=exclude_match_id)
 
-    logger.warning("No data at all for team %s; using neutral placeholder averages.", team_id)
-    return {"gf_home": 1.2, "ga_home": 1.2, "gf_away": 1.2, "ga_away": 1.2, "form": [], "source": "sin datos (placeholder)"}
+    if season_stats is None:
+        if recent_stats:
+            return recent_stats
+        logger.warning("No data at all for team %s; using neutral placeholder averages.", team_id)
+        return {"gf_home": 1.2, "ga_home": 1.2, "gf_away": 1.2, "ga_away": 1.2, "form": [], "source": "sin datos (placeholder)"}
+
+    if recent_stats is None:
+        return season_stats
+
+    season_weight = min(matches_played / SEASON_FULL_CONFIDENCE_MATCHES, 1.0)
+    recent_weight = 1 - season_weight
+
+    def blend(key: str) -> float:
+        return season_stats[key] * season_weight + recent_stats[key] * recent_weight
+
+    return {
+        "gf_home": blend("gf_home"),
+        "ga_home": blend("ga_home"),
+        "gf_away": blend("gf_away"),
+        "ga_away": blend("ga_away"),
+        "form": season_stats["form"] or recent_stats["form"],
+        "source": (
+            f"{season_weight * 100:.0f}% temporada ({matches_played} PJ) + "
+            f"{recent_weight * 100:.0f}% forma reciente"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------- #
@@ -690,8 +731,14 @@ def build_payload(
         client, home_team_info["id"], away_team_info["id"], reference_date, DEFAULT_H2H_N, exclude_match_id=match_id
     )
 
-    home_recent_summary = summarize_recent_records(home_recent)
-    away_recent_summary = summarize_recent_records(away_recent)
+    home_recent_10 = get_recent_match_records(
+        client, home_team_info["id"], reference_date, DEFAULT_RECENT_SUMMARY_N, exclude_match_id=match_id
+    )
+    away_recent_10 = get_recent_match_records(
+        client, away_team_info["id"], reference_date, DEFAULT_RECENT_SUMMARY_N, exclude_match_id=match_id
+    )
+    home_recent_summary = summarize_recent_records(home_recent_10)
+    away_recent_summary = summarize_recent_records(away_recent_10)
     recommendation = build_betting_recommendation(
         home_name=home_team_info["name"],
         away_name=away_team_info["name"],

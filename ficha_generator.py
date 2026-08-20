@@ -199,8 +199,13 @@ def _render_ficha(payload: dict[str, Any]) -> Image.Image:
     y = _stat_row(draw, y, "En contra (local / visita)", hs["ga_home"], aws["ga_away"])
     src_note = f"Fuente: {hs.get('source', '?')} / {aws.get('source', '?')}"
     f_small = font(15)
-    _center_text(draw, WIDTH / 2, y + 6, src_note, f_small, SUBTEXT)
-    y += 40
+    max_src_w = WIDTH - 2 * MARGIN
+    src_lines = _wrap_text(draw, src_note, f_small, max_src_w)
+    line_y = y + 6
+    for line in src_lines:
+        _center_text(draw, WIDTH / 2, line_y, line, f_small, SUBTEXT)
+        line_y += 20
+    y = line_y + 14
 
     # Model probabilities
     model = payload["model"]
